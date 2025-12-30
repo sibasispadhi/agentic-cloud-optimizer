@@ -41,4 +41,11 @@ public class DemoWorkloadSimulator implements WorkloadSimulator {
     public String getName() {
         return "demo";
     }
+    
+    @Override
+    public boolean isHealthy() {
+        // Demo simulator is always healthy (uses internal simulation)
+        log.debug("Demo simulator health check: OK");
+        return true;
+    }
 }

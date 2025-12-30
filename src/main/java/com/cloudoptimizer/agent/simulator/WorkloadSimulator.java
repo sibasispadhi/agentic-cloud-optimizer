@@ -34,4 +34,12 @@ public interface WorkloadSimulator {
      * @return simulator name (e.g., "demo", "http", "grpc")
      */
     String getName();
+    
+    /**
+     * Performs a health check to verify the simulator is ready.
+     * Should validate connectivity, configuration, etc.
+     * 
+     * @return true if healthy and ready to run tests, false otherwise
+     */
+    boolean isHealthy();
 }

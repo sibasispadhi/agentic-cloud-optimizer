@@ -4,10 +4,10 @@ import com.cloudoptimizer.agent.model.RunResult;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.http.HttpMethod;
-import org.springframework.http.ResponseEntity;
+import org.springframework.http.*;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestTemplate;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -46,10 +46,18 @@ public class HttpRestWorkloadSimulator implements WorkloadSimulator {
     @Value("${http.method:GET}")
     private String method;
     
+    @Value("${http.headers:}")
+    private String headersJson;
+    
+    @Value("${http.body:}")
+    private String requestBody;
+    
     private final RestTemplate restTemplate;
+    private final ObjectMapper objectMapper;
     
     public HttpRestWorkloadSimulator() {
         this.restTemplate = new RestTemplate();
+        this.objectMapper = new ObjectMapper();
         log.info("HttpRestWorkloadSimulator initialized");
     }
     
@@ -140,15 +148,46 @@ public class HttpRestWorkloadSimulator implements WorkloadSimulator {
     }
     
     /**
-     * Executes a single HTTP request.
+     * Executes a single HTTP request with headers and body.
      */
     private void executeHttpRequest(String url) {
+        HttpHeaders headers = parseHeaders();
+        HttpEntity<String> entity = new HttpEntity<>(requestBody != null && !requestBody.isEmpty() ? requestBody : null, headers);
+        
         if ("POST".equalsIgnoreCase(method)) {
-            restTemplate.postForEntity(url, null, String.class);
+            restTemplate.exchange(url, HttpMethod.POST, entity, String.class);
+        } else if ("PUT".equalsIgnoreCase(method)) {
+            restTemplate.exchange(url, HttpMethod.PUT, entity, String.class);
+        } else if ("DELETE".equalsIgnoreCase(method)) {
+            restTemplate.exchange(url, HttpMethod.DELETE, entity, String.class);
         } else {
             // Default to GET
-            restTemplate.getForEntity(url, String.class);
+            restTemplate.exchange(url, HttpMethod.GET, entity, String.class);
         }
+    }
+    
+    /**
+     * Parses headers from JSON string.
+     * Simple parser for MVP - expects format: {"Header-Name":"value","Another":"value"}
+     */
+    private HttpHeaders parseHeaders() {
+        HttpHeaders headers = new HttpHeaders();
+        
+        if (headersJson == null || headersJson.trim().isEmpty()) {
+            return headers;
+        }
+        
+        try {
+            // Simple JSON parsing for headers
+            @SuppressWarnings("unchecked")
+            java.util.Map<String, String> headerMap = objectMapper.readValue(headersJson, java.util.Map.class);
+            headerMap.forEach(headers::add);
+            log.debug("Parsed {} headers from config", headerMap.size());
+        } catch (Exception e) {
+            log.warn("Failed to parse headers JSON: {}. Using no headers.", e.getMessage());
+        }
+        
+        return headers;
     }
     
     /**
@@ -222,5 +261,30 @@ public class HttpRestWorkloadSimulator implements WorkloadSimulator {
     @Override
     public String getName() {
         return "http";
+    }
+    
+    @Override
+    public boolean isHealthy() {
+        String fullUrl = baseUrl + endpoint;
+        log.info("Performing health check for HTTP simulator: {}", fullUrl);
+        
+        try {
+            // Try a simple GET request to verify connectivity
+            HttpHeaders headers = parseHeaders();
+            HttpEntity<String> entity = new HttpEntity<>(null, headers);
+            ResponseEntity<String> response = restTemplate.exchange(fullUrl, HttpMethod.GET, entity, String.class);
+            
+            boolean healthy = response.getStatusCode().is2xxSuccessful();
+            if (healthy) {
+                log.info("Health check PASSED: {} returned {}", fullUrl, response.getStatusCode());
+            } else {
+                log.warn("Health check FAILED: {} returned {}", fullUrl, response.getStatusCode());
+            }
+            return healthy;
+            
+        } catch (Exception e) {
+            log.error("Health check FAILED: {} - {}", fullUrl, e.getMessage());
+            return false;
+        }
     }
 }

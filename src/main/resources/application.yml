@@ -45,7 +45,9 @@ workload:
 http:
   base-url: https://httpbin.org
   endpoint: /delay/0  # Fast endpoint for testing
-  method: GET         # GET or POST
+  method: GET         # GET, POST, PUT, DELETE
+  headers: '{"Content-Type":"application/json","Accept":"application/json"}'  # Optional JSON headers
+  body: ''            # Optional request body (for POST/PUT)
 
 metrics:
   directory: data/metrics

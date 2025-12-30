@@ -2,7 +2,7 @@
 
 **🔬 Proof-of-Concept: Autonomous AI agents for Java microservice optimization**
 
-> **⚠️ PROOF OF CONCEPT** - This is a working demo that showcases autonomous optimization technology. It currently optimizes its own built-in demo API. See [Current Limitations](#current-limitations) for details.
+> **⚠️ PROOF OF CONCEPT** - This is a working demo that showcases autonomous optimization technology. It can optimize both its built-in demo API and external HTTP REST APIs. See [Current Limitations](#current-limitations) for details.
 
 > **👉 New to this project? [Start Here →](docs/START_HERE.md)** (15-minute quick start)
 
@@ -13,7 +13,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Java 21](https://img.shields.io/badge/Java-21-blue.svg)](https://www.oracle.com/java/)
 [![Spring Boot 3.2.5](https://img.shields.io/badge/Spring%20Boot-3.2.5-brightgreen.svg)](https://spring.io/projects/spring-boot)
-[![Version](https://img.shields.io/badge/version-0.1.0-blue.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.2.0-blue.svg)](CHANGELOG.md)
 [![Status](https://img.shields.io/badge/status-proof--of--concept-orange.svg)](#)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 
@@ -231,6 +231,47 @@ cat artifacts/report.json
 
 # Option 3: Review reasoning traces
 cat artifacts/reasoning_trace_simple.txt
+```
+
+### 5. 🆕 Optimize External HTTP APIs (v0.2.0+)
+
+**NEW!** You can now optimize external HTTP REST APIs:
+
+```bash
+java -Dworkload.simulator=http \
+     -Dhttp.base-url=https://api.yourservice.com \
+     -Dhttp.endpoint=/api/endpoint \
+     -Dhttp.method=GET \
+     -Dbaseline.concurrency=4 \
+     -Dload.duration=10 \
+     -jar target/agent-cloud-optimizer-0.2.0.jar
+```
+
+**With headers and body:**
+
+```bash
+java -Dworkload.simulator=http \
+     -Dhttp.base-url=https://api.yourservice.com \
+     -Dhttp.endpoint=/v1/users \
+     -Dhttp.method=POST \
+     -Dhttp.headers='{"Authorization":"Bearer YOUR_TOKEN","Content-Type":"application/json"}' \
+     -Dhttp.body='{"query":"test"}' \
+     -Dbaseline.concurrency=4 \
+     -jar target/agent-cloud-optimizer-0.2.0.jar
+```
+
+**Or configure in `application.yml`:**
+
+```yaml
+workload:
+  simulator: http  # Use 'demo' for built-in, 'http' for external APIs
+
+http:
+  base-url: https://api.yourservice.com
+  endpoint: /api/endpoint
+  method: GET
+  headers: '{"Authorization":"Bearer TOKEN"}'
+  body: ''
 ```
 
 ---

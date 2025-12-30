@@ -109,6 +109,17 @@ public class RunnerMain implements CommandLineRunner {
             return;
         }
         
+        // Health check
+        log.info("Performing health check for '{}' simulator...", simulatorName);
+        if (!workloadSimulator.isHealthy()) {
+            log.error("Health check FAILED for '{}' simulator. Cannot proceed.", simulatorName);
+            log.error("Please verify configuration and connectivity.");
+            System.exit(SpringApplication.exit(context, () -> 1));
+            return;
+        }
+        log.info("Health check PASSED for '{}' simulator.", simulatorName);
+        log.info("");
+        
         log.info("Configuration:");
         log.info("  Workload Simulator: {}", simulatorName);
         log.info("  Agent Strategy: {}", agentStrategy);
