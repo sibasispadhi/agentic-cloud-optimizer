@@ -1,0 +1,294 @@
+# Ollama Setup for Agent Cloud Optimizer
+
+## Overview
+
+ACO uses Ollama for 100% offline LLM-based optimization. No API keys or external services required.
+
+## Installation
+
+### macOS
+
+```bash
+brew install ollama
+```
+
+### Linux
+
+```bash
+curl -fsSL https://ollama.com/install.sh | sh
+```
+
+### Windows
+
+Download from: https://ollama.com/download
+
+## Starting Ollama Service
+
+```bash
+ollama serve
+```
+
+This starts the Ollama service on `http://localhost:11434`
+
+## Pulling Models
+
+### Recommended: Llama 2 (Default)
+
+```bash
+ollama pull llama2
+```
+
+### Alternative: Mistral
+
+```bash
+ollama pull mistral
+```
+
+### Alternative: Llama 3
+
+```bash
+ollama pull llama3
+```
+
+## Configuration
+
+### application-dev.yml
+
+```yaml
+spring:
+  ai:
+    ollama:
+      base-url: http://localhost:11434
+      chat:
+        options:
+          model: llama2 # or mistral, llama3
+          temperature: 0.7
+          num-predict: 500
+          top-p: 0.9
+```
+
+### Environment Variables
+
+```bash
+# Override Ollama URL
+export OLLAMA_BASE_URL=http://localhost:11434
+
+# Override model
+export OLLAMA_MODEL=mistral
+
+# Select agent strategy
+export AGENT_STRATEGY=llm  # or 'simple' for rule-based
+```
+
+## Verifying Installation
+
+### Test Ollama Service
+
+```bash
+curl http://localhost:11434/api/tags
+```
+
+### Test Model
+
+```bash
+ollama run llama2 "Hello, how are you?"
+```
+
+## Agent Selection
+
+### Use Rule-Based Agent (No LLM Required)
+
+```bash
+java -jar target/agent-cloud-optimizer-1.0-SNAPSHOT.jar \
+  -Dagent.strategy=simple
+```
+
+### Use LLM Agent (Requires Ollama)
+
+```bash
+java -jar target/agent-cloud-optimizer-1.0-SNAPSHOT.jar \
+  -Dagent.strategy=llm
+```
+
+## Troubleshooting
+
+### Ollama Not Running
+
+**Error**: `Connection refused to localhost:11434`
+
+**Solution**:
+
+```bash
+# Start Ollama service
+ollama serve
+
+# Or run in background (macOS/Linux)
+nohup ollama serve > /dev/null 2>&1 &
+
+# Check if running
+curl http://localhost:11434/api/tags
+```
+
+### Model Not Found
+
+**Error**: `model 'llama2' not found`
+
+**Solution**:
+
+```bash
+# Pull the model
+ollama pull llama2
+
+# Verify it's available
+ollama list
+```
+
+### Port Already in Use
+
+**Error**: `bind: address already in use`
+
+**Solution**:
+
+```bash
+# Find process using port 11434
+lsof -i :11434
+
+# Kill existing Ollama process
+pkill ollama
+
+# Restart
+ollama serve
+```
+
+### Slow Response Times
+
+- **First request**: Model loading takes 5-30 seconds (normal)
+- **Subsequent requests**: Should be 2-5 seconds
+- **Solutions**:
+  - Keep Ollama service running between requests
+  - Use smaller models (mistral is faster than llama2)
+  - Reduce `num-predict` tokens in configuration
+  - Close other memory-intensive applications
+
+### Memory Issues
+
+**Symptoms**: System slowdown, OOM errors
+
+**Requirements**:
+
+- Llama2: ~4GB RAM
+- Mistral: ~4GB RAM
+- Llama3: ~8GB RAM
+- Recommended: 8GB+ total system RAM
+
+**Solutions**:
+
+```bash
+# Use smaller model
+ollama pull mistral
+
+# Check memory usage
+ollama ps
+
+# Unload models to free memory
+ollama stop llama2
+```
+
+### Spring AI Connection Errors
+
+**Error**: `Unable to connect to Ollama`
+
+**Checklist**:
+
+1. ✅ Ollama service is running: `curl http://localhost:11434`
+2. ✅ Model is pulled: `ollama list`
+3. ✅ Base URL is correct in `application.yml`
+4. ✅ No firewall blocking localhost:11434
+5. ✅ Check application logs for detailed error
+
+### macOS Specific Issues
+
+#### Ollama Not Starting
+
+```bash
+# Check if installed
+which ollama
+
+# Reinstall if needed
+brew reinstall ollama
+
+# Start as service
+brew services start ollama
+```
+
+#### Permission Denied
+
+```bash
+# Fix permissions
+sudo chmod +x /usr/local/bin/ollama
+```
+
+### Linux Specific Issues
+
+#### Service Not Running
+
+```bash
+# Check systemd status
+systemctl status ollama
+
+# Enable on boot
+sudo systemctl enable ollama
+
+# Start service
+sudo systemctl start ollama
+```
+
+### Windows Specific Issues
+
+#### Service Not Starting
+
+1. Check Windows Services for "Ollama"
+2. Restart the service
+3. Run as Administrator if needed
+4. Check Windows Firewall settings
+
+### Performance Benchmarking
+
+Test your Ollama installation:
+
+```bash
+# Simple response time test
+time ollama run llama2 "What is 2+2?"
+
+# Expected results:
+# - First run: 10-30 seconds (cold start)
+# - Second run: 2-5 seconds (warm)
+```
+
+## Model Comparison
+
+| Model   | Size  | Speed  | Quality   | Recommended For |
+| ------- | ----- | ------ | --------- | --------------- |
+| llama2  | 3.8GB | Medium | Good      | General use     |
+| mistral | 4.1GB | Fast   | Good      | Production      |
+| llama3  | 7.4GB | Slow   | Excellent | High accuracy   |
+
+## Performance Tips
+
+1. **Keep Ollama running**: Don't restart between requests
+2. **Warm up**: First request loads model into memory
+3. **Adjust temperature**: Lower (0.3-0.5) for deterministic, higher (0.7-0.9) for creative
+4. **Limit tokens**: `num-predict: 500` balances speed vs detail
+
+## Security Notes
+
+- Ollama runs locally - no data leaves your machine
+- No API keys or authentication required
+- Models are downloaded once and cached locally
+- Safe for sensitive production data
+
+## References
+
+- Ollama Documentation: https://ollama.com/docs
+- Model Library: https://ollama.com/library
+- Spring AI Ollama: https://docs.spring.io/spring-ai/reference/api/clients/ollama-chat.html

@@ -1,0 +1,50 @@
+# Compiled class files
+*.class
+target/
+
+# Log files
+*.log
+
+# Maven
+.mvn/
+mvnw
+mvnw.cmd
+
+# IDE
+.idea/
+*.iml
+.vscode/
+.settings/
+.classpath
+.project
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Application specific
+application-local.yml
+*.env
+secrets/
+
+# ACO artifacts
+data/
+artifacts/
+*.jsonl
+
+# Metrics
+metrics_*.jsonl
+reasoning_trace_*.txt
+
+# Temporary scripts
+fix-links.sh
+test-llm-agent.sh
+
+# Development notes and artifacts
+chatgpt.txt
+*_UPDATE*.md
+*_CHECK*.md
+*_FIXED*.md
+*_SUMMARY*.md
+VIEWING_*.md
+RELEASE_READY_CHECKLIST.md

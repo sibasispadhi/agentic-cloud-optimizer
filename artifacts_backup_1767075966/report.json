@@ -1,0 +1,35 @@
+{
+  "decision" : {
+    "reasoning" : "Increasing concurrency to maintain a balance between throughput and resource efficiency, while considering the recent median latency of 23.48 ms.",
+    "confidence_score" : 0.6,
+    "recommendation" : "Set concurrency to 8",
+    "impact_level" : "CRITICAL"
+  },
+  "agent_strategy" : "llm",
+  "baseline" : {
+    "median_latency_ms" : 28.978917,
+    "requests_per_second" : 136.43163458661616,
+    "cost_estimate_usd" : 0.1368,
+    "p95_latency_ms" : 47.950791,
+    "total_requests" : 1368,
+    "avg_latency_ms" : 29.2749435124269,
+    "concurrency" : 4
+  },
+  "after" : {
+    "median_latency_ms" : 29.989083,
+    "requests_per_second" : 269.2269425927768,
+    "cost_estimate_usd" : 0.2706,
+    "p95_latency_ms" : 46.996292,
+    "total_requests" : 2706,
+    "avg_latency_ms" : 29.609411923503327,
+    "concurrency" : 8
+  },
+  "timestamp" : "2025-12-24T19:49:33.942487Z",
+  "improvements" : {
+    "latency_change_percent" : 3.4858652585257124,
+    "throughput_change_rps" : 132.79530800616067,
+    "latency_change_ms" : 1.0101660000000017,
+    "throughput_change_percent" : 97.33468957439861,
+    "concurrency_change" : 4
+  }
+}

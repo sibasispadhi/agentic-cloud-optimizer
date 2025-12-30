@@ -1,0 +1,16 @@
+{
+  "timestamp" : "2025-12-02T23:46:45.721Z",
+  "concurrency" : 3,
+  "duration_seconds" : 10,
+  "total_requests" : 999,
+  "successful_requests" : 999,
+  "failed_requests" : 0,
+  "requests_per_second" : 99.56149093083515,
+  "median_latency_ms" : 29.972125,
+  "avg_latency_ms" : 30.095543425425426,
+  "min_latency_ms" : 9.963459,
+  "max_latency_ms" : 48.995292,
+  "p95_latency_ms" : 47.96975,
+  "p99_latency_ms" : 48.981042,
+  "cost_estimate_usd" : 0.0999
+}

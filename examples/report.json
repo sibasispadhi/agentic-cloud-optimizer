@@ -1,0 +1,35 @@
+{
+  "decision" : {
+    "reasoning" : "Median latency (30.59ms) is well below target (100.00ms). Decreasing concurrency from 4 to 3 to reduce resource usage.",
+    "confidence_score" : 0.95,
+    "recommendation" : "Set concurrency to 3",
+    "impact_level" : "LOW"
+  },
+  "agent_strategy" : "simple",
+  "baseline" : {
+    "median_latency_ms" : 29.974083,
+    "requests_per_second" : 133.4726784114661,
+    "cost_estimate_usd" : 0.1341,
+    "p95_latency_ms" : 47.949917,
+    "total_requests" : 1341,
+    "avg_latency_ms" : 29.885284732289335,
+    "concurrency" : 4
+  },
+  "after" : {
+    "median_latency_ms" : 29.972125,
+    "requests_per_second" : 99.56149093083515,
+    "cost_estimate_usd" : 0.0999,
+    "p95_latency_ms" : 47.96975,
+    "total_requests" : 999,
+    "avg_latency_ms" : 30.095543425425426,
+    "concurrency" : 3
+  },
+  "timestamp" : "2025-12-02T23:46:45.725176Z",
+  "improvements" : {
+    "latency_change_percent" : -0.006532309929220862,
+    "throughput_change_rps" : -33.91118748063094,
+    "latency_change_ms" : -0.0019580000000019027,
+    "throughput_change_percent" : -25.40683822653983,
+    "concurrency_change" : -1
+  }
+}
