@@ -37,6 +37,18 @@ agent:
   target-latency-ms: 100.0
   artifacts-dir: artifacts
 
+# Workload Simulator Configuration
+workload:
+  simulator: demo  # Options: 'demo' (built-in) or 'http' (external REST API)
+
+# HTTP REST Simulator Configuration
+http:
+  base-url: https://httpbin.org
+  endpoint: /delay/0  # Fast endpoint for testing
+  method: GET         # GET, POST, PUT, DELETE
+  headers: '{"Content-Type":"application/json","Accept":"application/json"}'  # Optional JSON headers
+  body: ''            # Optional request body (for POST/PUT)
+
 metrics:
   directory: data/metrics
   application-name: agent-cloud-optimizer

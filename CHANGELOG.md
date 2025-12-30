@@ -7,16 +7,73 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-> 🗺️ See our [Product Roadmap](ROADMAP.md) for planned features in v0.2.0 and beyond.
-
-### Proposed for v0.2.0
-- Plugin architecture for external APIs
-- WorkloadSimulator interface
-- HTTP/gRPC/Database/MQ simulators
-- Configuration system for external services
+> 🗺️ See our [Product Roadmap](ROADMAP.md) for planned features beyond v0.2.0.
 
 ### Future Versions
 See [ROADMAP.md](ROADMAP.md) for complete vision through v1.0.0 and beyond.
+
+## [0.2.0] - 2025-12-30
+
+### 🆕 Added - Plugin Architecture
+- **WorkloadSimulator Interface** - Pluggable simulator architecture
+  - Clean abstraction for different workload types
+  - Health check validation before tests
+  - Extensible for custom implementations
+- **DemoWorkloadSimulator** - Refactored built-in simulator
+  - Full backward compatibility with v0.1.0
+  - Wraps existing LoadRunner functionality
+  - Always-healthy demo mode
+- **HttpRestWorkloadSimulator** - NEW! External HTTP API testing
+  - Test any HTTP REST endpoint
+  - Support for GET, POST, PUT, DELETE methods
+  - Custom headers configuration (JSON format)
+  - Request body support for POST/PUT
+  - Multi-threaded load testing
+  - Automatic health checks before testing
+  - Full latency and throughput metrics
+- **Simulator Selection** - YAML-based configuration
+  - `workload.simulator` property ("demo" or "http")
+  - System property overrides supported
+  - Clear error messages for invalid simulators
+
+### Changed
+- **RunnerMain** refactored to use WorkloadSimulator plugins
+  - No longer hardcoded to LoadRunner
+  - Dynamic simulator selection at runtime
+  - Added pre-flight health checks
+- **LoadRunner** now wrapped by DemoWorkloadSimulator
+  - Maintains all original functionality
+  - Clean separation of concerns
+
+### Technical Details
+- Java 21
+- Spring Boot 3.2.5
+- Added Jackson for header JSON parsing
+- RestTemplate for HTTP requests
+- Full test coverage maintained (24 passing tests)
+
+### Migration from v0.1.0
+- **No breaking changes!** Default behavior unchanged
+- To use HTTP simulator: Set `workload.simulator=http` in config
+- See README for HTTP configuration examples
+
+### Known Limitations (v0.2.0)
+- HTTP simulator tested in controlled environments
+- No ServiceLoader-based plugin discovery (manual registration)
+- Simple header parsing (MVP implementation)
+- No retry logic or circuit breakers
+- Database/gRPC/MQ simulators deferred to v0.3.0+
+
+### What This Enables
+✅ **You can now optimize external HTTP APIs without code changes!**
+
+Example:
+```bash
+java -Dworkload.simulator=http \
+     -Dhttp.base-url=https://api.yourservice.com \
+     -Dhttp.endpoint=/api/endpoint \
+     -jar agent-cloud-optimizer-0.2.0.jar
+```
 
 ## [0.1.0] - 2025-12-30
 
@@ -94,5 +151,6 @@ not yet a production-ready drop-in plugin.
 - **Fixed** for any bug fixes
 - **Security** in case of vulnerabilities
 
-[Unreleased]: https://github.com/YOUR_USERNAME/agent-cloud-optimizer/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/YOUR_USERNAME/agent-cloud-optimizer/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/YOUR_USERNAME/agent-cloud-optimizer/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/YOUR_USERNAME/agent-cloud-optimizer/releases/tag/v0.1.0

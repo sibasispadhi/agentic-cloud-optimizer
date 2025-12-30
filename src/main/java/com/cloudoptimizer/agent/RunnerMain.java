@@ -4,6 +4,10 @@ import com.cloudoptimizer.agent.model.AgentDecision;
 import com.cloudoptimizer.agent.model.MetricRow;
 import com.cloudoptimizer.agent.model.RunResult;
 import com.cloudoptimizer.agent.service.LoadRunner;
+import com.cloudoptimizer.agent.simulator.WorkloadSimulator;
+import com.cloudoptimizer.agent.simulator.DemoWorkloadSimulator;
+import com.cloudoptimizer.agent.simulator.HttpRestWorkloadSimulator;
+import org.springframework.beans.factory.annotation.Value;
 import com.cloudoptimizer.agent.service.MetricsLogger;
 import com.cloudoptimizer.agent.service.SimpleAgent;
 import com.cloudoptimizer.agent.service.SpringAiLlmAgent;
@@ -54,19 +58,26 @@ public class RunnerMain implements CommandLineRunner {
     private static final String COST_ESTIMATE_USD = "cost_estimate_usd";
     
     private final ApplicationContext context;
-    private final LoadRunner loadRunner;
+    private final Map<String, WorkloadSimulator> simulators;
+    private final String simulatorName;
     private final MetricsLogger metricsLogger;
     private final SimpleAgent simpleAgent;
     private final SpringAiLlmAgent llmAgent;
     private final ObjectMapper objectMapper;
 
     public RunnerMain(ApplicationContext context,
-                     LoadRunner loadRunner,
+                     DemoWorkloadSimulator demoSimulator,
+                     HttpRestWorkloadSimulator httpSimulator,
                      MetricsLogger metricsLogger,
                      SimpleAgent simpleAgent,
-                     SpringAiLlmAgent llmAgent) {
+                     SpringAiLlmAgent llmAgent,
+                     @Value("${workload.simulator:demo}") String simulatorName) {
         this.context = context;
-        this.loadRunner = loadRunner;
+        this.simulators = Map.of(
+                "demo", demoSimulator,
+                "http", httpSimulator
+        );
+        this.simulatorName = simulatorName;
         this.metricsLogger = metricsLogger;
         this.simpleAgent = simpleAgent;
         this.llmAgent = llmAgent;
@@ -90,7 +101,27 @@ public class RunnerMain implements CommandLineRunner {
         int loadDuration = Integer.parseInt(System.getProperty("load.duration", "10"));
         double targetRps = Double.parseDouble(System.getProperty("target.rps", "0"));
 
+        // Get the selected simulator
+        WorkloadSimulator workloadSimulator = simulators.get(simulatorName);
+        if (workloadSimulator == null) {
+            log.error("Unknown simulator: {}. Available: {}", simulatorName, simulators.keySet());
+            System.exit(SpringApplication.exit(context, () -> 1));
+            return;
+        }
+        
+        // Health check
+        log.info("Performing health check for '{}' simulator...", simulatorName);
+        if (!workloadSimulator.isHealthy()) {
+            log.error("Health check FAILED for '{}' simulator. Cannot proceed.", simulatorName);
+            log.error("Please verify configuration and connectivity.");
+            System.exit(SpringApplication.exit(context, () -> 1));
+            return;
+        }
+        log.info("Health check PASSED for '{}' simulator.", simulatorName);
+        log.info("");
+        
         log.info("Configuration:");
+        log.info("  Workload Simulator: {}", simulatorName);
         log.info("  Agent Strategy: {}", agentStrategy);
         log.info("  Baseline Concurrency: {}", baselineConcurrency);
         log.info("  Load Duration: {}s", loadDuration);
@@ -104,8 +135,8 @@ public class RunnerMain implements CommandLineRunner {
         }
 
         // Phase 1: Baseline Load Test
-        log.info("Phase 1: Running baseline load test...");
-        RunResult baseline = loadRunner.runLoad(loadDuration, baselineConcurrency, targetRps);
+        log.info("Phase 1: Running baseline load test with {} simulator...", workloadSimulator.getName());
+        RunResult baseline = workloadSimulator.executeLoad(baselineConcurrency, loadDuration, targetRps);
         log.info("Baseline Results: {}", baseline);
         writeJson(artifactsDir.resolve("baseline.json"), baseline);
 
@@ -140,7 +171,7 @@ public class RunnerMain implements CommandLineRunner {
         // Phase 3: Post-Optimization Load Test
         log.info("");
         log.info("Phase 3: Running post-optimization load test...");
-        RunResult after = loadRunner.runLoad(loadDuration, newConcurrency, targetRps);
+        RunResult after = workloadSimulator.executeLoad(newConcurrency, loadDuration, targetRps);
         log.info("Post-Optimization Results: {}", after);
         writeJson(artifactsDir.resolve("after.json"), after);
 
