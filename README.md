@@ -137,16 +137,21 @@ Choose your autonomous agent:
 
 ## ⚠️ Current Limitations
 
-**This is a v0.1.0 proof-of-concept.** It demonstrates the technology works but has these limitations:
+**This is a v0.2.0 proof-of-concept.** It demonstrates the technology works but has these limitations:
 
-❌ **Not yet a drop-in plugin** - Tests its own built-in demo API, not external services  
-❌ **Requires code modification** - To test your API, you need to modify `LoadRunner.java`  
 ❌ **No multi-service orchestration** - Single-service optimization only  
+❌ **Limited plugin ecosystem** - Only demo and HTTP REST simulators (v0.2.0)  
+❌ **No database/gRPC/MQ simulators** - Coming in v0.3.0+  
+❌ **Basic configuration** - No advanced retry/circuit breaker logic yet  
 
-✅ **What it DOES provide:**
+✅ **What it DOES provide (v0.2.0):**
 - Working autonomous optimization with real agents
 - Full explainability and reasoning traces
-- Proof that the architecture works
+- **Plugin architecture for external HTTP APIs** 🆕
+- **No code modification needed** - Pure configuration! 🆕
+- GET/POST/PUT/DELETE HTTP methods
+- Custom headers and request bodies
+- Health check validation
 - Educational value for learning AI agents
 - Foundation for production features
 

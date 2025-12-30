@@ -1,6 +1,6 @@
 # 🗺️ Agent Cloud Optimizer - Product Roadmap
 
-**Current Version:** v0.1.0 (Concurrency Optimization POC)  
+**Current Version:** v0.2.0 (Plugin Architecture with HTTP REST Support)  
 **Vision:** Production-ready autonomous optimization platform for Java microservices
 
 > ⚠️ **This roadmap is community-driven and subject to change.**  
@@ -15,7 +15,7 @@
 
 ---
 
-## ✅ v0.1.0 - Concurrency Optimization POC (CURRENT)
+## ✅ v0.1.0 - Concurrency Optimization POC
 
 **Status:** ✅ Released  
 **Focus:** Proof-of-concept with concurrency optimization  
@@ -466,6 +466,7 @@ public interface WorkloadSimulator {
 
 ```
 ✅ v0.1.0 - Concurrency POC (RELEASED)
+✅ v0.2.0 - Plugin Architecture (CURRENT)
 📋 v0.2.0 - Plugin Architecture (NEXT)
 📋 v0.3.0 - Multi-Parameter Optimization
 📋 v0.4.0 - Kubernetes Native Integration
