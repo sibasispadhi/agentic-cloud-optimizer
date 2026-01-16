@@ -1,8 +1,34 @@
+**[← Back to README](../README.md)** | **[← Previous: START_HERE](START_HERE.md)**
+
+---
+
 # Ollama Setup for Agent Cloud Optimizer
 
 ## Overview
 
 ACO uses Ollama for 100% offline LLM-based optimization. No API keys or external services required.
+
+**Current Tested Version**: Ollama 0.13.5 with Llama 3.2 models
+
+## Quick Setup (TL;DR)
+
+```bash
+# 1. Install Ollama
+brew install ollama  # macOS
+
+# 2. Start service
+ollama serve
+
+# 3. Pull recommended model (1.3GB - fast!)
+ollama pull llama3.2:1b
+
+# 4. Verify
+ollama list
+curl http://localhost:11434/api/tags
+
+# 5. Run your app
+java -jar target/agent-cloud-optimizer-0.2.0.jar
+```
 
 ## Installation
 
@@ -32,22 +58,23 @@ This starts the Ollama service on `http://localhost:11434`
 
 ## Pulling Models
 
-### Recommended: Llama 2 (Default)
+### Recommended: Llama 3.2 (Default - Optimized for Speed)
 
 ```bash
-ollama pull llama2
+# Fastest - 1.3GB (Recommended for demos and development)
+ollama pull llama3.2:1b
+
+# Balanced - 2.0GB (Better quality, still fast)
+ollama pull llama3.2:3b
 ```
 
-### Alternative: Mistral
+### Alternative: Older Models
 
 ```bash
-ollama pull mistral
-```
-
-### Alternative: Llama 3
-
-```bash
-ollama pull llama3
+# Legacy models (larger, slower)
+ollama pull llama2      # 3.8GB
+ollama pull mistral     # 4.1GB
+ollama pull llama3      # 7.4GB
 ```
 
 ## Configuration
@@ -61,7 +88,8 @@ spring:
       base-url: http://localhost:11434
       chat:
         options:
-          model: llama2 # or mistral, llama3
+          model: llama3.2:1b  # Recommended: fast and efficient
+          # Alternatives: llama3.2:3b, llama2, mistral
           temperature: 0.7
           num-predict: 500
           top-p: 0.9
@@ -74,10 +102,10 @@ spring:
 export OLLAMA_BASE_URL=http://localhost:11434
 
 # Override model
-export OLLAMA_MODEL=mistral
+export OLLAMA_MODEL=llama3.2:1b  # or llama3.2:3b, llama2, mistral
 
 # Select agent strategy
-export AGENT_STRATEGY=llm  # or 'simple' for rule-based
+export AGENT_STRATEGY=llm  # This is the default now! Only use 'simple' for testing/fallback
 ```
 
 ## Verifying Installation
@@ -91,22 +119,24 @@ curl http://localhost:11434/api/tags
 ### Test Model
 
 ```bash
-ollama run llama2 "Hello, how are you?"
+ollama run llama3.2:1b "Hello, how are you?"
 ```
 
 ## Agent Selection
 
-### Use Rule-Based Agent (No LLM Required)
+### Use Rule-Based Agent (Fallback Mode - Not Recommended)
+
+**Note**: This is NOT the intended use case for ACO. The LLM-powered mode is what makes ACO valuable!
 
 ```bash
-java -jar target/agent-cloud-optimizer-1.0-SNAPSHOT.jar \
+java -jar target/agent-cloud-optimizer-0.2.0.jar \
   -Dagent.strategy=simple
 ```
 
 ### Use LLM Agent (Requires Ollama)
 
 ```bash
-java -jar target/agent-cloud-optimizer-1.0-SNAPSHOT.jar \
+java -jar target/agent-cloud-optimizer-0.2.0.jar \
   -Dagent.strategy=llm
 ```
 
@@ -131,13 +161,13 @@ curl http://localhost:11434/api/tags
 
 ### Model Not Found
 
-**Error**: `model 'llama2' not found`
+**Error**: `model 'llama3.2:1b' not found`
 
 **Solution**:
 
 ```bash
 # Pull the model
-ollama pull llama2
+ollama pull llama3.2:1b
 
 # Verify it's available
 ollama list
@@ -162,11 +192,11 @@ ollama serve
 
 ### Slow Response Times
 
-- **First request**: Model loading takes 5-30 seconds (normal)
-- **Subsequent requests**: Should be 2-5 seconds
+- **First request**: Model loading takes 2-10 seconds (normal for llama3.2:1b)
+- **Subsequent requests**: Should be 1-3 seconds
 - **Solutions**:
   - Keep Ollama service running between requests
-  - Use smaller models (mistral is faster than llama2)
+  - Use smaller models (llama3.2:1b is fastest)
   - Reduce `num-predict` tokens in configuration
   - Close other memory-intensive applications
 
@@ -176,22 +206,24 @@ ollama serve
 
 **Requirements**:
 
+- Llama3.2:1b: ~1.5GB RAM (Recommended)
+- Llama3.2:3b: ~2.5GB RAM
 - Llama2: ~4GB RAM
 - Mistral: ~4GB RAM
 - Llama3: ~8GB RAM
-- Recommended: 8GB+ total system RAM
+- Recommended: 4GB+ total system RAM (8GB+ for larger models)
 
 **Solutions**:
 
 ```bash
-# Use smaller model
-ollama pull mistral
+# Use smallest model
+ollama pull llama3.2:1b
 
 # Check memory usage
 ollama ps
 
 # Unload models to free memory
-ollama stop llama2
+ollama stop llama3.2:1b
 ```
 
 ### Spring AI Connection Errors
@@ -258,20 +290,22 @@ Test your Ollama installation:
 
 ```bash
 # Simple response time test
-time ollama run llama2 "What is 2+2?"
+time ollama run llama3.2:1b "What is 2+2?"
 
 # Expected results:
-# - First run: 10-30 seconds (cold start)
-# - Second run: 2-5 seconds (warm)
+# - First run: 2-10 seconds (cold start)
+# - Second run: 1-3 seconds (warm)
 ```
 
 ## Model Comparison
 
-| Model   | Size  | Speed  | Quality   | Recommended For |
-| ------- | ----- | ------ | --------- | --------------- |
-| llama2  | 3.8GB | Medium | Good      | General use     |
-| mistral | 4.1GB | Fast   | Good      | Production      |
-| llama3  | 7.4GB | Slow   | Excellent | High accuracy   |
+| Model        | Size  | Speed      | Quality   | RAM Usage | Recommended For          |
+| ------------ | ----- | ---------- | --------- | --------- | ------------------------ |
+| llama3.2:1b  | 1.3GB | Very Fast  | Good      | ~1.5GB    | **Demos, Development**   |
+| llama3.2:3b  | 2.0GB | Fast       | Very Good | ~2.5GB    | **Production (Balanced)**|
+| mistral      | 4.1GB | Medium     | Good      | ~4GB      | Legacy production        |
+| llama2       | 3.8GB | Medium     | Good      | ~4GB      | Legacy general use       |
+| llama3       | 7.4GB | Slow       | Excellent | ~8GB      | High accuracy needs      |
 
 ## Performance Tips
 
