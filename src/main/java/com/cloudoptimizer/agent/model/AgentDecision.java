@@ -3,11 +3,12 @@ package com.cloudoptimizer.agent.model;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.ToString;
 
 import java.time.Instant;
-import java.util.ArrayList;
 import java.util.List;
-import java.util.Objects;
 
 /**
  * Represents an AI agent's optimization decision for cloud resources.
@@ -20,6 +21,9 @@ import java.util.Objects;
  * @version 1.0
  * @since 2025
  */
+@Getter
+@Builder
+@ToString
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class AgentDecision {
 
@@ -66,6 +70,15 @@ public class AgentDecision {
     @JsonProperty("metrics_analyzed")
     private final List<String> metricsAnalyzed;
 
+    @JsonProperty("recommended_heap_size_mb")
+    private final Integer recommendedHeapSizeMb;
+
+    @JsonProperty("concurrency_confidence")
+    private final Double concurrencyConfidence;
+
+    @JsonProperty("heap_confidence")
+    private final Double heapConfidence;
+
     /**
      * Impact level classification for optimization decisions.
      */
@@ -92,266 +105,4 @@ public class AgentDecision {
         }
     }
 
-    /**
-     * Private constructor for builder pattern.
-     */
-    private AgentDecision(Builder builder) {
-        this.decisionId = builder.decisionId;
-        this.timestamp = builder.timestamp != null ? builder.timestamp : Instant.now();
-        this.resourceId = builder.resourceId;
-        this.resourceType = builder.resourceType;
-        this.strategy = builder.strategy;
-        this.recommendation = builder.recommendation;
-        this.reasoning = builder.reasoning;
-        this.confidenceScore = builder.confidenceScore;
-        this.estimatedSavings = builder.estimatedSavings;
-        this.estimatedSavingsCurrency = builder.estimatedSavingsCurrency;
-        this.impactLevel = builder.impactLevel;
-        this.actionItems = builder.actionItems != null ? List.copyOf(builder.actionItems) : List.of();
-        this.risks = builder.risks != null ? List.copyOf(builder.risks) : List.of();
-        this.metricsAnalyzed = builder.metricsAnalyzed != null ? List.copyOf(builder.metricsAnalyzed) : List.of();
-    }
-
-    // Getters
-
-    public String getDecisionId() {
-        return decisionId;
-    }
-
-    public Instant getTimestamp() {
-        return timestamp;
-    }
-
-    public String getResourceId() {
-        return resourceId;
-    }
-
-    public String getResourceType() {
-        return resourceType;
-    }
-
-    public AgentStrategy getStrategy() {
-        return strategy;
-    }
-
-    public String getRecommendation() {
-        return recommendation;
-    }
-
-    public String getReasoning() {
-        return reasoning;
-    }
-
-    public Double getConfidenceScore() {
-        return confidenceScore;
-    }
-
-    public Double getEstimatedSavings() {
-        return estimatedSavings;
-    }
-
-    public String getEstimatedSavingsCurrency() {
-        return estimatedSavingsCurrency;
-    }
-
-    public ImpactLevel getImpactLevel() {
-        return impactLevel;
-    }
-
-    public List<String> getActionItems() {
-        return actionItems;
-    }
-
-    public List<String> getRisks() {
-        return risks;
-    }
-
-    public List<String> getMetricsAnalyzed() {
-        return metricsAnalyzed;
-    }
-
-    /**
-     * Creates a new builder instance.
-     * 
-     * @return new Builder instance
-     */
-    public static Builder builder() {
-        return new Builder();
-    }
-
-    /**
-     * Builder class for constructing AgentDecision instances.
-     */
-    public static class Builder {
-        private String decisionId;
-        private Instant timestamp;
-        private String resourceId;
-        private String resourceType;
-        private AgentStrategy strategy;
-        private String recommendation;
-        private String reasoning;
-        private Double confidenceScore;
-        private Double estimatedSavings;
-        private String estimatedSavingsCurrency;
-        private ImpactLevel impactLevel;
-        private List<String> actionItems;
-        private List<String> risks;
-        private List<String> metricsAnalyzed;
-
-        private Builder() {
-        }
-
-        public Builder decisionId(String decisionId) {
-            this.decisionId = decisionId;
-            return this;
-        }
-
-        public Builder timestamp(Instant timestamp) {
-            this.timestamp = timestamp;
-            return this;
-        }
-
-        public Builder resourceId(String resourceId) {
-            this.resourceId = resourceId;
-            return this;
-        }
-
-        public Builder resourceType(String resourceType) {
-            this.resourceType = resourceType;
-            return this;
-        }
-
-        public Builder strategy(AgentStrategy strategy) {
-            this.strategy = strategy;
-            return this;
-        }
-
-        public Builder recommendation(String recommendation) {
-            this.recommendation = recommendation;
-            return this;
-        }
-
-        public Builder reasoning(String reasoning) {
-            this.reasoning = reasoning;
-            return this;
-        }
-
-        public Builder confidenceScore(Double confidenceScore) {
-            this.confidenceScore = confidenceScore;
-            return this;
-        }
-
-        public Builder estimatedSavings(Double estimatedSavings) {
-            this.estimatedSavings = estimatedSavings;
-            return this;
-        }
-
-        public Builder estimatedSavingsCurrency(String currency) {
-            this.estimatedSavingsCurrency = currency;
-            return this;
-        }
-
-        public Builder impactLevel(ImpactLevel impactLevel) {
-            this.impactLevel = impactLevel;
-            return this;
-        }
-
-        public Builder actionItems(List<String> actionItems) {
-            this.actionItems = actionItems != null ? new ArrayList<>(actionItems) : null;
-            return this;
-        }
-
-        public Builder addActionItem(String actionItem) {
-            if (this.actionItems == null) {
-                this.actionItems = new ArrayList<>();
-            }
-            this.actionItems.add(actionItem);
-            return this;
-        }
-
-        public Builder risks(List<String> risks) {
-            this.risks = risks != null ? new ArrayList<>(risks) : null;
-            return this;
-        }
-
-        public Builder addRisk(String risk) {
-            if (this.risks == null) {
-                this.risks = new ArrayList<>();
-            }
-            this.risks.add(risk);
-            return this;
-        }
-
-        public Builder metricsAnalyzed(List<String> metricsAnalyzed) {
-            this.metricsAnalyzed = metricsAnalyzed != null ? new ArrayList<>(metricsAnalyzed) : null;
-            return this;
-        }
-
-        public Builder addMetricAnalyzed(String metric) {
-            if (this.metricsAnalyzed == null) {
-                this.metricsAnalyzed = new ArrayList<>();
-            }
-            this.metricsAnalyzed.add(metric);
-            return this;
-        }
-
-        /**
-         * Builds and validates the AgentDecision instance.
-         * 
-         * @return new AgentDecision instance
-         * @throws IllegalStateException if required fields are missing
-         */
-        public AgentDecision build() {
-            validateRequiredFields();
-            return new AgentDecision(this);
-        }
-
-        private void validateRequiredFields() {
-            if (decisionId == null || decisionId.isBlank()) {
-                throw new IllegalStateException("decisionId is required");
-            }
-            if (resourceId == null || resourceId.isBlank()) {
-                throw new IllegalStateException("resourceId is required");
-            }
-            if (resourceType == null || resourceType.isBlank()) {
-                throw new IllegalStateException("resourceType is required");
-            }
-            if (strategy == null) {
-                throw new IllegalStateException("strategy is required");
-            }
-            if (recommendation == null || recommendation.isBlank()) {
-                throw new IllegalStateException("recommendation is required");
-            }
-            if (confidenceScore != null && (confidenceScore < 0.0 || confidenceScore > 1.0)) {
-                throw new IllegalStateException("confidenceScore must be between 0.0 and 1.0");
-            }
-        }
-    }
-
-    @Override
-    public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
-        AgentDecision that = (AgentDecision) o;
-        return Objects.equals(decisionId, that.decisionId);
-    }
-
-    @Override
-    public int hashCode() {
-        return Objects.hash(decisionId);
-    }
-
-    @Override
-    public String toString() {
-        return "AgentDecision{" +
-                "decisionId='" + decisionId + '\'' +
-                ", timestamp=" + timestamp +
-                ", resourceId='" + resourceId + '\'' +
-                ", resourceType='" + resourceType + '\'' +
-                ", strategy=" + strategy +
-                ", recommendation='" + recommendation + '\'' +
-                ", confidenceScore=" + confidenceScore +
-                ", impactLevel=" + impactLevel +
-                '}';
-    }
 }

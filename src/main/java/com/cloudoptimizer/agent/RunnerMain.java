@@ -1,21 +1,19 @@
 package com.cloudoptimizer.agent;
 
 import com.cloudoptimizer.agent.model.AgentDecision;
-import com.cloudoptimizer.agent.model.MetricRow;
 import com.cloudoptimizer.agent.model.RunResult;
-import com.cloudoptimizer.agent.service.LoadRunner;
-import com.cloudoptimizer.agent.simulator.WorkloadSimulator;
-import com.cloudoptimizer.agent.simulator.DemoWorkloadSimulator;
-import com.cloudoptimizer.agent.simulator.HttpRestWorkloadSimulator;
-import org.springframework.beans.factory.annotation.Value;
 import com.cloudoptimizer.agent.service.MetricsLogger;
 import com.cloudoptimizer.agent.service.SimpleAgent;
 import com.cloudoptimizer.agent.service.SpringAiLlmAgent;
+import com.cloudoptimizer.agent.simulator.DemoWorkloadSimulator;
+import com.cloudoptimizer.agent.simulator.HttpRestWorkloadSimulator;
+import com.cloudoptimizer.agent.simulator.WorkloadSimulator;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.boot.SpringApplication;
 import org.springframework.context.ApplicationContext;
@@ -26,7 +24,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 
 /**
@@ -60,6 +57,8 @@ public class RunnerMain implements CommandLineRunner {
     private final ApplicationContext context;
     private final Map<String, WorkloadSimulator> simulators;
     private final String simulatorName;
+    private final String agentStrategy;
+    private final String runMode;
     private final MetricsLogger metricsLogger;
     private final SimpleAgent simpleAgent;
     private final SpringAiLlmAgent llmAgent;
@@ -71,13 +70,17 @@ public class RunnerMain implements CommandLineRunner {
                      MetricsLogger metricsLogger,
                      SimpleAgent simpleAgent,
                      SpringAiLlmAgent llmAgent,
-                     @Value("${workload.simulator:demo}") String simulatorName) {
+                     @Value("${workload.simulator:demo}") String simulatorName,
+                     @Value("${agent.strategy:llm}") String agentStrategy,
+                     @Value("${run.mode:web}") String runMode) {
         this.context = context;
         this.simulators = Map.of(
                 "demo", demoSimulator,
                 "http", httpSimulator
         );
         this.simulatorName = simulatorName;
+        this.agentStrategy = agentStrategy;
+        this.runMode = runMode;
         this.metricsLogger = metricsLogger;
         this.simpleAgent = simpleAgent;
         this.llmAgent = llmAgent;
@@ -89,14 +92,22 @@ public class RunnerMain implements CommandLineRunner {
 
     @Override
     public void run(String... args) throws Exception {
+        // Only run in CLI mode
+        if (!"cli".equalsIgnoreCase(runMode)) {
+            log.info("Running in {} mode - CommandLineRunner disabled", runMode);
+            log.info("Access the live dashboard at: http://localhost:8080/live-dashboard.html");
+            return;
+        }
+        
         if (log.isInfoEnabled()) {
             log.info("=".repeat(60));
-            log.info("Agent Cloud Optimizer v1.0.0");
+            log.info("Agent Cloud Optimizer v0.2.0 - CLI Mode");
             log.info("=".repeat(60));
         }
 
-        // Get configuration
-        String agentStrategy = System.getProperty("agent.strategy", "simple");
+        // Get configuration (agent.strategy now injected via constructor)
+        // Allow system property override if provided
+        String effectiveStrategy = System.getProperty("agent.strategy", this.agentStrategy);
         int baselineConcurrency = Integer.parseInt(System.getProperty("baseline.concurrency", "4"));
         int loadDuration = Integer.parseInt(System.getProperty("load.duration", "10"));
         double targetRps = Double.parseDouble(System.getProperty("target.rps", "0"));
@@ -122,7 +133,7 @@ public class RunnerMain implements CommandLineRunner {
         
         log.info("Configuration:");
         log.info("  Workload Simulator: {}", simulatorName);
-        log.info("  Agent Strategy: {}", agentStrategy);
+        log.info("  Agent Strategy: {} (LLM-powered optimization - use 'simple' only for testing)", effectiveStrategy);
         log.info("  Baseline Concurrency: {}", baselineConcurrency);
         log.info("  Load Duration: {}s", loadDuration);
         log.info("  Target RPS: {}", targetRps > 0 ? targetRps : "unlimited");
@@ -142,23 +153,23 @@ public class RunnerMain implements CommandLineRunner {
 
         // Phase 2: Agent Analysis
         log.info("");
-        log.info("Phase 2: Analyzing metrics with {} agent...", agentStrategy);
+        log.info("Phase 2: Analyzing metrics with {} agent (including heap optimization)...", effectiveStrategy);
         
         // Wait briefly for async metrics to flush to disk
         Thread.sleep(1000);
-        
-        // Get recent metrics
-        List<MetricRow> recentMetrics = metricsLogger.readRecent(20);
-        log.info("Analyzing {} recent metrics", recentMetrics.size());
 
         AgentDecision decision;
-        if ("llm".equalsIgnoreCase(agentStrategy)) {
-            decision = llmAgent.decide(recentMetrics, baselineConcurrency);
+        if ("llm".equalsIgnoreCase(effectiveStrategy)) {
+            decision = llmAgent.decideWithHeapAnalysis(baseline, baselineConcurrency);
         } else {
-            decision = simpleAgent.decide(recentMetrics, baselineConcurrency);
+            log.warn("Using simple agent mode - this is NOT the intended use case! LLM mode provides the core value.");
+            decision = simpleAgent.decideWithHeapAnalysis(baseline, baselineConcurrency);
         }
 
         log.info("Agent Decision: {}", decision.getRecommendation());
+        if (decision.getRecommendedHeapSizeMb() != null) {
+            log.info("Recommended Heap Size: {} MB", decision.getRecommendedHeapSizeMb());
+        }
         log.info("Reasoning: {}", decision.getReasoning());
         if (log.isInfoEnabled()) {
             log.info("Confidence: {}%", String.format("%.0f", decision.getConfidenceScore() * 100));
@@ -178,7 +189,7 @@ public class RunnerMain implements CommandLineRunner {
         // Phase 4: Generate Report
         log.info("");
         log.info("Phase 4: Generating comparison report...");
-        Map<String, Object> report = generateReport(baseline, after, decision, agentStrategy);
+        Map<String, Object> report = generateReport(baseline, after, decision, effectiveStrategy);
         writeJson(artifactsDir.resolve("report.json"), report);
 
         // Print Summary
@@ -193,7 +204,7 @@ public class RunnerMain implements CommandLineRunner {
             log.info("  - baseline.json");
             log.info("  - after.json");
             log.info("  - report.json");
-            log.info("  - reasoning_trace_{}.txt", agentStrategy);
+            log.info("  - reasoning_trace_{}.txt", effectiveStrategy.equals("llm") ? "llm" : "rule");
             log.info("");
         }
 
@@ -237,6 +248,19 @@ public class RunnerMain implements CommandLineRunner {
         baselineMap.put(REQUESTS_PER_SECOND, baseline.getRequestsPerSecond());
         baselineMap.put(TOTAL_REQUESTS, baseline.getTotalRequests());
         baselineMap.put(COST_ESTIMATE_USD, baseline.getCostEstimateUsd());
+        
+        // Add heap metrics if available
+        if (baseline.getHeapMetrics() != null) {
+            Map<String, Object> heapMap = new HashMap<>();
+            heapMap.put("heap_size_mb", baseline.getHeapMetrics().getHeapSizeMb());
+            heapMap.put("heap_used_mb", baseline.getHeapMetrics().getHeapUsedMb());
+            heapMap.put("heap_usage_percent", baseline.getHeapMetrics().getHeapUsagePercent());
+            heapMap.put("gc_count", baseline.getHeapMetrics().getGcCount());
+            heapMap.put("gc_time_ms", baseline.getHeapMetrics().getGcTimeMs());
+            heapMap.put("gc_pause_avg_ms", baseline.getHeapMetrics().getGcPauseTimeAvgMs());
+            heapMap.put("gc_frequency_per_sec", baseline.getHeapMetrics().getGcFrequencyPerSec());
+            baselineMap.put("heap_metrics", heapMap);
+        }
         report.put("baseline", baselineMap);
         
         // After metrics
@@ -248,6 +272,19 @@ public class RunnerMain implements CommandLineRunner {
         afterMap.put(REQUESTS_PER_SECOND, after.getRequestsPerSecond());
         afterMap.put(TOTAL_REQUESTS, after.getTotalRequests());
         afterMap.put(COST_ESTIMATE_USD, after.getCostEstimateUsd());
+        
+        // Add heap metrics if available
+        if (after.getHeapMetrics() != null) {
+            Map<String, Object> heapMap = new HashMap<>();
+            heapMap.put("heap_size_mb", after.getHeapMetrics().getHeapSizeMb());
+            heapMap.put("heap_used_mb", after.getHeapMetrics().getHeapUsedMb());
+            heapMap.put("heap_usage_percent", after.getHeapMetrics().getHeapUsagePercent());
+            heapMap.put("gc_count", after.getHeapMetrics().getGcCount());
+            heapMap.put("gc_time_ms", after.getHeapMetrics().getGcTimeMs());
+            heapMap.put("gc_pause_avg_ms", after.getHeapMetrics().getGcPauseTimeAvgMs());
+            heapMap.put("gc_frequency_per_sec", after.getHeapMetrics().getGcFrequencyPerSec());
+            afterMap.put("heap_metrics", heapMap);
+        }
         report.put("after", afterMap);
         
         // Improvements
@@ -259,11 +296,35 @@ public class RunnerMain implements CommandLineRunner {
         improvements.put("throughput_change_percent", 
                 calculatePercentChange(baseline.getRequestsPerSecond(), after.getRequestsPerSecond()));
         improvements.put("concurrency_change", after.getConcurrency() - baseline.getConcurrency());
+        
+        // Add heap improvements if available
+        if (baseline.getHeapMetrics() != null && after.getHeapMetrics() != null) {
+            Map<String, Object> heapImprovements = new HashMap<>();
+            heapImprovements.put("heap_size_change_mb", 
+                    after.getHeapMetrics().getHeapSizeMb() - baseline.getHeapMetrics().getHeapSizeMb());
+            heapImprovements.put("heap_usage_change_percent", 
+                    after.getHeapMetrics().getHeapUsagePercent() - baseline.getHeapMetrics().getHeapUsagePercent());
+            heapImprovements.put("gc_frequency_change_per_sec", 
+                    after.getHeapMetrics().getGcFrequencyPerSec() - baseline.getHeapMetrics().getGcFrequencyPerSec());
+            heapImprovements.put("gc_frequency_reduction_percent", 
+                    calculatePercentChange(baseline.getHeapMetrics().getGcFrequencyPerSec(), 
+                            after.getHeapMetrics().getGcFrequencyPerSec()));
+            heapImprovements.put("gc_pause_change_ms", 
+                    after.getHeapMetrics().getGcPauseTimeAvgMs() - baseline.getHeapMetrics().getGcPauseTimeAvgMs());
+            heapImprovements.put("gc_pause_improvement_percent", 
+                    calculatePercentChange(baseline.getHeapMetrics().getGcPauseTimeAvgMs(), 
+                            after.getHeapMetrics().getGcPauseTimeAvgMs()));
+            improvements.put("heap_improvements", heapImprovements);
+        }
+        
         report.put("improvements", improvements);
         
         // Decision info
         Map<String, Object> decisionMap = new HashMap<>();
         decisionMap.put("recommendation", decision.getRecommendation());
+        if (decision.getRecommendedHeapSizeMb() != null) {
+            decisionMap.put("recommended_heap_size_mb", decision.getRecommendedHeapSizeMb());
+        }
         decisionMap.put("reasoning", decision.getReasoning());
         decisionMap.put("confidence_score", decision.getConfidenceScore());
         decisionMap.put("impact_level", decision.getImpactLevel().toString());

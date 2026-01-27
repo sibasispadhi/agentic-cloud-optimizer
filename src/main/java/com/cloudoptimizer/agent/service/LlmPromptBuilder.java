@@ -1,6 +1,8 @@
 package com.cloudoptimizer.agent.service;
 
+import com.cloudoptimizer.agent.model.HeapMetrics;
 import com.cloudoptimizer.agent.model.MetricRow;
+import com.cloudoptimizer.agent.model.RunResult;
 
 import java.util.List;
 import java.util.stream.Collectors;
@@ -60,6 +62,96 @@ public class LlmPromptBuilder {
         prompt.append("Respond with ONLY the JSON object, no additional text.%n");
         
         return String.format(prompt.toString());
+    }
+
+    /**
+     * Builds optimization prompt including heap metrics analysis.
+     * 
+     * @param baselineResult baseline test results with heap metrics
+     * @param currentConcurrency current concurrency setting
+     * @param targetLatencyMs target latency threshold
+     * @return formatted prompt string
+     */
+    public String buildPromptWithHeapMetrics(RunResult baselineResult, int currentConcurrency, double targetLatencyMs) {
+        StringBuilder prompt = new StringBuilder();
+        
+        prompt.append("You are an expert cloud infrastructure optimization assistant specializing in JVM performance tuning.\n");
+        prompt.append("\n");
+        prompt.append("TASK: Analyze performance and heap metrics, then recommend optimal concurrency AND heap size settings.\n");
+        prompt.append("\n");
+        
+        prompt.append("CURRENT CONFIGURATION:\n");
+        prompt.append(String.format("- Current Concurrency: %d threads\n", currentConcurrency));
+        prompt.append(String.format("- Target Latency: %.2f ms\n", targetLatencyMs));
+        
+        HeapMetrics heapMetrics = baselineResult.getHeapMetrics();
+        if (heapMetrics != null) {
+            prompt.append(String.format("- Current Heap Size: %d MB\n", heapMetrics.getHeapSizeMb()));
+        }
+        prompt.append("\n");
+        
+        prompt.append("PERFORMANCE METRICS:\n");
+        prompt.append(String.format("- Median Latency: %.2f ms\n", baselineResult.getMedianLatencyMs()));
+        prompt.append(String.format("- P95 Latency: %.2f ms\n", baselineResult.getP95LatencyMs()));
+        prompt.append(String.format("- Avg Latency: %.2f ms\n", baselineResult.getAvgLatencyMs()));
+        prompt.append(String.format("- Throughput: %.2f req/s\n", baselineResult.getRequestsPerSecond()));
+        prompt.append("\n");
+        
+        if (heapMetrics != null) {
+            prompt.append("HEAP & GC METRICS:\n");
+            prompt.append(String.format("- Heap Usage: %.1f%% (%d MB used of %d MB)\n", 
+                    heapMetrics.getHeapUsagePercent(), 
+                    heapMetrics.getHeapUsedMb(), 
+                    heapMetrics.getHeapSizeMb()));
+            prompt.append(String.format("- GC Frequency: %.2f collections/second\n", heapMetrics.getGcFrequencyPerSec()));
+            prompt.append(String.format("- GC Pause Time (avg): %.2f ms\n", heapMetrics.getGcPauseTimeAvgMs()));
+            prompt.append(String.format("- Total GC Time: %d ms during test\n", heapMetrics.getGcTimeMs()));
+            prompt.append("\n");
+        }
+        
+        // Calculate latency status for explicit guidance
+        double latencyPercent = (baselineResult.getMedianLatencyMs() / targetLatencyMs) * 100;
+        
+        prompt.append("LATENCY ANALYSIS:\n");
+        prompt.append(String.format("- Current median latency: %.2f ms\n", baselineResult.getMedianLatencyMs()));
+        prompt.append(String.format("- Target latency: %.2f ms\n", targetLatencyMs));
+        prompt.append(String.format("- Current is %.1f%% of target\n", latencyPercent));
+        if (latencyPercent > 100) {
+            prompt.append(String.format("- STATUS: EXCEEDS TARGET by %.1f%% - NEEDS IMPROVEMENT\n", latencyPercent - 100));
+        } else if (latencyPercent >= 90) {
+            prompt.append("- STATUS: AT TARGET - maintain current settings\n");
+        } else {
+            prompt.append("- STATUS: BELOW TARGET - already meeting goal\n");
+        }
+        prompt.append("\n");
+        
+        prompt.append("OPTIMIZATION GOAL: Ensure latency stays at or below target while maintaining system stability.\n");
+        prompt.append("\n");
+        
+        prompt.append("DECISION GUIDELINES:\n");
+        prompt.append("CONCURRENCY:\n");
+        prompt.append("- If STATUS is EXCEEDS TARGET: Increase threads by 2-4 to reduce latency\n");
+        prompt.append("- If STATUS is AT TARGET: Maintain current threads\n");
+        prompt.append("- If STATUS is BELOW TARGET: Keep current threads (already meeting goal)\n");
+        prompt.append("\n");
+        prompt.append("HEAP:\n");
+        prompt.append("- If GC pressure exists (freq > 1/sec OR usage > 80%): Increase heap to reduce GC overhead\n");
+        prompt.append("- If GC pause time > 100ms: Increase heap to improve performance\n");
+        prompt.append("- If GC is healthy (freq < 0.5/sec, usage < 50%): Keep current heap size\n");
+        prompt.append("\n");
+        
+        prompt.append("REQUIRED OUTPUT FORMAT (JSON only, no markdown):\n");
+        prompt.append("{\n");
+        prompt.append("  \"newConcurrency\": <integer between 1-100>,\n");
+        prompt.append("  \"recommendedHeapSizeMb\": <integer heap size in MB>,\n");
+        prompt.append("  \"expectedLatencyMs\": <estimated latency after changes>,\n");
+        prompt.append("  \"concurrencyReasoning\": \"<2-3 sentences explaining why this concurrency level is optimal>\",\n");
+        prompt.append("  \"heapReasoning\": \"<2-3 sentences explaining why this heap size is optimal>\"\n");
+        prompt.append("}\n");
+        prompt.append("\n");
+        prompt.append("Respond with ONLY the JSON object, no additional text.\n");
+        
+        return prompt.toString();
     }
 
     /**

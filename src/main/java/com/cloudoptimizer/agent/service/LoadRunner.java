@@ -1,5 +1,6 @@
 package com.cloudoptimizer.agent.service;
 
+import com.cloudoptimizer.agent.model.HeapMetrics;
 import com.cloudoptimizer.agent.model.MetricRow;
 import com.cloudoptimizer.agent.model.RunResult;
 import org.slf4j.Logger;
@@ -32,10 +33,12 @@ public class LoadRunner {
     private static final double COST_PER_REQUEST_USD = 0.0001; // $0.0001 per request
 
     private final MetricsLogger metricsLogger;
+    private final GcMetricsCollector gcMetricsCollector;
 
     @Autowired
-    public LoadRunner(MetricsLogger metricsLogger) {
+    public LoadRunner(MetricsLogger metricsLogger, GcMetricsCollector gcMetricsCollector) {
         this.metricsLogger = metricsLogger;
+        this.gcMetricsCollector = gcMetricsCollector;
     }
 
     /**
@@ -50,6 +53,9 @@ public class LoadRunner {
         log.info("Starting load test: duration={}s, concurrency={}, targetRps={}", 
                 durationSeconds, concurrency, targetRps);
 
+        // Reset GC metrics collector before test
+        gcMetricsCollector.reset();
+        
         Instant startTime = Instant.now();
         List<Double> latencies = new CopyOnWriteArrayList<>();
         CountDownLatch latch = new CountDownLatch(concurrency);
@@ -124,6 +130,10 @@ public class LoadRunner {
         long actualDurationMs = endTime.toEpochMilli() - startTime.toEpochMilli();
         double actualDurationSec = actualDurationMs / 1000.0;
 
+        // Collect GC metrics after test
+        HeapMetrics heapMetrics = gcMetricsCollector.collectMetrics(actualDurationSec);
+        log.info("Heap metrics: {}", heapMetrics);
+
         // Calculate statistics
         RunResult result = calculateStatistics(
                 latencies, 
@@ -131,7 +141,8 @@ public class LoadRunner {
                 durationSeconds,
                 actualDurationSec,
                 successCount.get(), 
-                failCount.get()
+                failCount.get(),
+                heapMetrics
         );
 
         log.info("Load test complete: {}", result);
@@ -164,7 +175,7 @@ public class LoadRunner {
                     .metricName("latencyMs")
                     .metricValue(latencyMs)
                     .unit("ms")
-                    .addTag("concurrency", String.valueOf(concurrency))
+                    .tags(java.util.Map.of("concurrency", String.valueOf(concurrency)))
                     .build();
             
             metricsLogger.logMetric(metric);
@@ -178,7 +189,7 @@ public class LoadRunner {
      */
     private RunResult calculateStatistics(List<Double> latencies, int concurrency, 
                                          int durationSeconds, double actualDurationSec,
-                                         int successCount, int failCount) {
+                                         int successCount, int failCount, HeapMetrics heapMetrics) {
         if (latencies.isEmpty()) {
             return RunResult.builder()
                     .concurrency(concurrency)
@@ -194,6 +205,7 @@ public class LoadRunner {
                     .p95LatencyMs(0.0)
                     .p99LatencyMs(0.0)
                     .costEstimateUsd(0.0)
+                    .heapMetrics(heapMetrics)
                     .build();
         }
 
@@ -224,6 +236,7 @@ public class LoadRunner {
                 .p95LatencyMs(p95)
                 .p99LatencyMs(p99)
                 .costEstimateUsd(cost)
+                .heapMetrics(heapMetrics)
                 .build();
     }
 
