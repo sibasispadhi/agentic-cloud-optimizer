@@ -40,6 +40,9 @@ reasoning_trace_*.txt
 fix-links.sh
 test-llm-agent.sh
 
+# Docs archive (keep locally, do not publish)
+docs/archive/
+
 # Development notes and artifacts
 chatgpt.txt
 *_UPDATE*.md
@@ -48,3 +51,8 @@ chatgpt.txt
 *_SUMMARY*.md
 VIEWING_*.md
 RELEASE_READY_CHECKLIST.md
+
+# Private documentation (internal use only, not for public repo)
+SLIDES.md
+HEAP_OPTIMIZATION_STATUS.md
+HEAP_OPTIMIZATION_IMPLEMENTATION.md
