@@ -22,19 +22,26 @@ echo "  Target RPS: $TARGET_RPS"
 echo ""
 
 # Build if needed
-if [ ! -f "target/agent-cloud-optimizer-1.0-SNAPSHOT.jar" ]; then
+if ! ls target/*.jar >/dev/null 2>&1; then
     echo "Building application..."
-    mvn clean package -DskipTests
+    if [ -x "./mvnw" ]; then
+        ./mvnw clean package -DskipTests
+    else
+        mvn clean package -DskipTests
+    fi
     echo ""
 fi
 
+JAR_PATH=$(ls -1 target/*.jar | head -n 1)
+
 # Run baseline
 echo "Running baseline load test..."
-java -jar target/agent-cloud-optimizer-1.0-SNAPSHOT.jar \
+java \
     -Dagent.strategy=simple \
     -Dbaseline.concurrency=$CONCURRENCY \
     -Dload.duration=$DURATION \
-    -Dtarget.rps=$TARGET_RPS
+    -Dtarget.rps=$TARGET_RPS \
+    -jar "$JAR_PATH"
 
 echo ""
 echo "======================================"

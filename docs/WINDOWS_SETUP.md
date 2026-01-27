@@ -1,3 +1,7 @@
+**[← Back to README](../README.md)** | **[Next: OLLAMA_SETUP →](OLLAMA_SETUP.md)**
+
+---
+
 # Windows Setup Guide for Agent Cloud Optimizer
 
 **For the 90% of users on Windows** 🪟
@@ -57,7 +61,7 @@ mvn -version
 # Should show: Apache Maven 3.8+ 
 ```
 
-#### **1.3 Install Ollama (for LLM Agent)**
+#### **1.3 Install Ollama (REQUIRED for LLM Mode - Primary Feature)**
 ```powershell
 # Visit: https://ollama.com/download
 # Click "Download for Windows"
@@ -88,7 +92,7 @@ mvn clean package -DskipTests
 
 # Verify build success
 dir target\*.jar
-# Should see: agent-cloud-optimizer-1.0-SNAPSHOT.jar
+# Should see: agent-cloud-optimizer-0.2.0.jar
 ```
 
 ---
@@ -113,22 +117,22 @@ ollama list
 #### **Option 1: Using Batch Scripts (Easiest)**
 
 ```powershell
-# Run Simple Agent (rule-based)
-scripts\run-agent.bat
+# Run LLM Agent (DEFAULT - AI-powered optimization)
+scripts\\run-agent.bat
 
-# Run LLM Agent (AI-powered)
-set AGENT_STRATEGY=llm
-scripts\run-agent.bat
+# Run Simple Agent (fallback only - NOT RECOMMENDED)
+set AGENT_STRATEGY=simple
+scripts\\run-agent.bat
 ```
 
 #### **Option 2: Direct Java Command**
 
 ```powershell
-# Simple Agent
-java -jar target\agent-cloud-optimizer-1.0-SNAPSHOT.jar
+# LLM Agent (DEFAULT)
+java -jar target\\agent-cloud-optimizer-0.2.0.jar
 
-# LLM Agent
-java -Dagent.strategy=llm -Dspring.ai.ollama.chat.options.model=llama3.2:1b -jar target\agent-cloud-optimizer-1.0-SNAPSHOT.jar
+# Simple Agent (fallback only)
+java -Dagent.strategy=simple -jar target\\agent-cloud-optimizer-0.2.0.jar
 ```
 
 ---
@@ -161,7 +165,7 @@ C:\Users\YourName\Documents\agent-cloud-optimizer\
 │   └── run-baseline.bat       ✅ Windows script
 │
 ├── target\
-│   └── agent-cloud-optimizer-1.0-SNAPSHOT.jar
+│   └── agent-cloud-optimizer-0.2.0.jar
 │
 ├── artifacts\
 │   ├── baseline.json
@@ -185,7 +189,7 @@ REM Agent Cloud Optimizer - Windows Launcher
 SETLOCAL EnableDelayedExpansion
 
 REM Set defaults
-IF "%AGENT_STRATEGY%"=="" SET AGENT_STRATEGY=simple
+IF "%AGENT_STRATEGY%"=="" SET AGENT_STRATEGY=llm
 IF "%CONCURRENCY%"=="" SET CONCURRENCY=4
 IF "%DURATION%"=="" SET DURATION=10
 
@@ -202,7 +206,7 @@ REM Run the agent
 java -Dagent.strategy=%AGENT_STRATEGY% ^
      -Dbaseline.concurrency=%CONCURRENCY% ^
      -Dload.duration=%DURATION% ^
-     -jar target\agent-cloud-optimizer-1.0-SNAPSHOT.jar
+     -jar target\agent-cloud-optimizer-0.2.0.jar
 
 ENDLOCAL
 ```
@@ -212,7 +216,7 @@ ENDLOCAL
 @echo off
 REM Run baseline test only
 
-SET AGENT_STRATEGY=simple
+SET AGENT_STRATEGY=llm
 SET CONCURRENCY=4
 SET DURATION=10
 
@@ -232,7 +236,7 @@ $env:AGENT_STRATEGY="llm"
 $env:CONCURRENCY=8
 
 # Run
-java -jar target\agent-cloud-optimizer-1.0-SNAPSHOT.jar
+java -jar target\agent-cloud-optimizer-0.2.0.jar
 ```
 
 #### **Command Prompt**
@@ -242,7 +246,7 @@ set AGENT_STRATEGY=llm
 set CONCURRENCY=8
 
 # Run
-java -jar target\agent-cloud-optimizer-1.0-SNAPSHOT.jar
+java -jar target\agent-cloud-optimizer-0.2.0.jar
 ```
 
 #### **Permanent (System Variables)**
@@ -325,7 +329,7 @@ taskkill /PID <PID> /F
 Set-ExecutionPolicy RemoteSigned -Scope CurrentUser
 
 # OR just run directly:
-java -jar target\agent-cloud-optimizer-1.0-SNAPSHOT.jar
+java -jar target\agent-cloud-optimizer-0.2.0.jar
 ```
 
 ### **Issue 6: Python Not Found (for demo.html)**
@@ -360,8 +364,8 @@ LLM Inference Time:
   - llama2:       2-5 seconds per decision
 
 Total Run Time:
-  - Simple Agent:  ~15-25 seconds
-  - LLM Agent:     ~20-30 seconds
+  - LLM Agent (default):     ~20-30 seconds
+  - Simple Agent (fallback): ~15-25 seconds
 ```
 
 ### **System Requirements**:
@@ -396,14 +400,14 @@ ollama list
 # 4. Build
 mvn clean package -DskipTests
 
-# 5. Run Simple Agent
+# 5. Run LLM Agent (Default)
 scripts\run-agent.bat
 
 # 6. Check results
 dir artifacts
 type artifacts\report.json
 
-# 7. Run LLM Agent
+# 7. (Optional) Run Simple Agent (Fallback)
 set AGENT_STRATEGY=llm
 scripts\run-agent.bat
 
@@ -438,11 +442,11 @@ notepad $PROFILE
 
 # Add:
 function Run-ACO-Simple { 
-    java -jar target\agent-cloud-optimizer-1.0-SNAPSHOT.jar 
+    java -jar target\agent-cloud-optimizer-0.2.0.jar 
 }
 
 function Run-ACO-LLM { 
-    java -Dagent.strategy=llm -jar target\agent-cloud-optimizer-1.0-SNAPSHOT.jar 
+    java -Dagent.strategy=llm -jar target\agent-cloud-optimizer-0.2.0.jar 
 }
 
 # Usage:

@@ -19,19 +19,34 @@ echo   Target RPS: %TARGET_RPS%
 echo.
 
 REM Build if needed
-if not exist "target\agent-cloud-optimizer-1.0-SNAPSHOT.jar" (
+if not exist "target\*.jar" (
     echo Building application...
-    call mvn clean package -DskipTests
+    if exist "mvnw.cmd" (
+        call mvnw.cmd clean package -DskipTests
+    ) else (
+        call mvn clean package -DskipTests
+    )
     echo.
 )
 
+REM Grab first jar from target/
+for %%f in (target\*.jar) do (
+    set JAR_PATH=%%f
+    goto :run
+)
+
+echo ERROR: No jar found in target\
+exit /b 1
+
+:run
 REM Run baseline
 echo Running baseline load test...
-java -jar target\agent-cloud-optimizer-1.0-SNAPSHOT.jar ^
+java ^
     -Dagent.strategy=simple ^
     -Dbaseline.concurrency=%CONCURRENCY% ^
     -Dload.duration=%DURATION% ^
-    -Dtarget.rps=%TARGET_RPS%
+    -Dtarget.rps=%TARGET_RPS% ^
+    -jar %JAR_PATH%
 
 echo.
 echo ======================================
