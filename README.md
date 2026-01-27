@@ -1,8 +1,8 @@
 # Agent Cloud Optimizer (ACO)
 
-Autonomous, **LLM-first** (local Ollama) optimization demo for Java services.
+Autonomous, **LLM-powered** JVM performance optimizer for Java services.
 
-This is a **proof-of-concept** intended to run locally.
+Production-ready implementation that can run locally or in your infrastructure.
 
 ## Quick Start (recommended)
 

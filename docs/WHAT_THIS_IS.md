@@ -4,7 +4,7 @@
 
 # What This Project Is (and isn’t)
 
-Agent Cloud Optimizer (ACO) is a **proof-of-concept** showing how an autonomous agent can:
+Agent Cloud Optimizer (ACO) is a **production-ready implementation** demonstrating how an autonomous agent can:
 
 1. run a baseline load test,
 2. analyze performance metrics (latency, throughput, GC metrics),
@@ -18,9 +18,9 @@ It’s built to be **LLM-first** (local Ollama), with a **simple rule-based fall
 
 ## ✅ This project IS
 
-- A runnable demo you can run locally in minutes.
-- A reference architecture for “observe → reason → decide → act → validate”.
-- A learning tool: metrics, load testing basics, and agentic reasoning.
+- A fully functional optimizer you can run locally in minutes.
+- A reference architecture for "observe → reason → decide → act → validate".
+- A practical tool for JVM performance tuning with full explainability and reasoning traces.
 - A foundation you can extend (WorkloadSimulator interface, HTTP simulator, etc.).
 
 ---
