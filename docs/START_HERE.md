@@ -21,11 +21,11 @@ ollama --version
 ## 2) Get the code
 
 ```bash
-git clone https://github.com/yourusername/agent-cloud-optimizer.git
+git clone https://github.com/sibasispadhi/agent-cloud-optimizer.git
 cd agent-cloud-optimizer
 ```
 
-**Note:** Replace `yourusername` with the actual GitHub username/organization where the repo is hosted.
+**Note:** Replace `sibasispadhi` with the actual GitHub username/organization where the repo is hosted.
 
 ## 3) Build
 
@@ -66,6 +66,7 @@ Open: http://localhost:8080/live-dashboard.html
 ## 6) View results
 
 - `demo.html` (recommended - requires Python 3):
+
   ```bash
   python3 -m http.server 8000
   # Then open in browser: http://localhost:8000/demo.html

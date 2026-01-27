@@ -1,3 +1,7 @@
+**[← Back to README](../README.md)** | **[📚 Reading Path](../NEW_USER_READING_PATH.md)** | **[Next: LEARNING_GUIDE →](../docs/LEARNING_GUIDE.md)**
+
+---
+
 # Example Artifacts
 
 This directory contains example output artifacts from ACO optimization runs.
@@ -28,7 +32,7 @@ Performance metrics **after** optimization:
 
 Comprehensive before/after comparison:
 
-- Agent strategy used (simple or llm)
+- Agent strategy used (llm by default, simple as fallback)
 - Decision details (recommendation, reasoning, confidence)
 - Performance improvements:
   - Latency changes (ms and %)
@@ -36,16 +40,31 @@ Comprehensive before/after comparison:
   - Concurrency adjustments
 - Full baseline and after metrics
 
-### reasoning_trace_simple.txt
+### reasoning_trace_llm.txt (Primary)
 
-Detailed reasoning trace for rule-based agent decisions:
+Detailed reasoning trace for LLM-powered agent decisions:
 
 - Input parameters (current concurrency, target latency)
-- Analysis (median latency evaluation)
-- Condition matched (increase/decrease/maintain)
-- Decision rationale
+- LLM prompt sent (what metrics were provided)
+- LLM response (JSON with newConcurrency, expectedLatencyMs, explanation)
+- Parsed decision with AI reasoning
 - Action items
 - Confidence score and impact level
+- Risks identified
+
+**This is the main output - shows AI reasoning!**
+
+### reasoning_trace_rule.txt (Fallback Only)
+
+Basic reasoning trace for rule-based agent (fallback mode):
+
+- Input parameters
+- Simple threshold analysis
+- Rule matched (if-else logic)
+- Decision rationale
+- Action items
+
+**Only created when using simple mode (not recommended)**
 
 ## Understanding the Results
 
@@ -176,8 +195,8 @@ open http://localhost:8000/demo.html
 1. **Run your own optimization**: `./scripts/run-agent.sh`
 2. **Compare results**: Check if your metrics match expected patterns
 3. **Tune parameters**: Adjust concurrency, duration, target latency
-4. **Try LLM agent**: See [OLLAMA_SETUP.md](../OLLAMA_SETUP.md)
-5. **Visualize**: Open `demo.html` to see charts and graphs
+4. **Visualize**: Open `demo.html` to see charts and graphs
+5. **View LLM reasoning**: Check `reasoning_trace_llm.txt` to see AI analysis
 
 ## Questions?
 
