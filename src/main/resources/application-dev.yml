@@ -4,7 +4,7 @@ spring:
       base-url: ${OLLAMA_BASE_URL:http://localhost:11434}
       chat:
         options:
-          model: ${OLLAMA_MODEL:llama3.2:1b}
+          model: ${OLLAMA_MODEL:llama3.2:3b}
           temperature: 0.7
           # Additional options for optimization
           num-predict: 500
@@ -17,6 +17,6 @@ logging:
 
 # Agent configuration
 agent:
-  target-latency-ms: 100.0
+  target-latency-ms: 100.0  # Default target for demo
   artifacts-dir: artifacts
-  strategy: ${AGENT_STRATEGY:simple}  # simple or llm
+  strategy: ${AGENT_STRATEGY:llm}  # llm (AI-powered) or simple (rule-based fallback)

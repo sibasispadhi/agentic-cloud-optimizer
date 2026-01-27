@@ -11,3 +11,7 @@ logging:
   level:
     com.cloudoptimizer: INFO
     org.springframework: WARN
+
+# Agent configuration
+agent:
+  strategy: ${AGENT_STRATEGY:llm}  # LLM-powered optimization (simple mode only for fallback)

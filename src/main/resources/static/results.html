@@ -1,0 +1,198 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Agent Cloud Optimizer - Results</title>
+  <link rel="stylesheet" href="/results.css" />
+</head>
+<body>
+  <div class="container">
+    <header class="header">
+      <h1>Agent Cloud Optimizer</h1>
+      <p>Optimization results</p>
+    </header>
+
+    <div id="loading" class="card">
+      <h2 class="h2">Loading</h2>
+      <p style="color: var(--muted); margin: 0;">Reading artifacts from <code>artifacts/report.json</code>…</p>
+    </div>
+
+    <div id="error" class="card" style="display:none;">
+      <h2 class="h2">Cannot load results</h2>
+      <div class="error" style="margin-top: var(--space-4);">
+        <p id="error-message" style="margin: 0;"></p>
+      </div>
+      <div class="notice" style="margin-top: var(--space-4);">
+        <p style="margin: 0;"><strong>Fix:</strong> run the optimizer first, then refresh.</p>
+        <pre style="margin-top: var(--space-3); white-space: pre-wrap;">./scripts/run-agent.sh
+# Windows: scripts\run-agent.bat</pre>
+      </div>
+    </div>
+
+    <main id="content" style="display:none;">
+      <section class="card">
+        <h2 class="h2">Run info</h2>
+        <div style="display:flex; gap: var(--space-4); flex-wrap: wrap; align-items: center;">
+          <div>Agent: <span class="badge" id="strategy-badge">-</span></div>
+          <div style="color: var(--muted);">Timestamp: <span id="timestamp">-</span></div>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2 class="h2">Key metrics</h2>
+        <div class="metrics-grid">
+          <div class="metric-box">
+            <div class="metric-label">Median latency</div>
+            <div class="metric-value" id="latency-value">-</div>
+            <div class="metric-change" id="latency-change">-</div>
+          </div>
+          <div class="metric-box">
+            <div class="metric-label">Throughput (RPS)</div>
+            <div class="metric-value" id="throughput-value">-</div>
+            <div class="metric-change" id="throughput-change">-</div>
+          </div>
+          <div class="metric-box">
+            <div class="metric-label">Concurrency</div>
+            <div class="metric-value" id="concurrency-value">-</div>
+            <div class="metric-change" id="concurrency-change">-</div>
+          </div>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2 class="h2">Before vs After</h2>
+        <table class="table" aria-label="Before vs After metrics">
+          <thead>
+            <tr>
+              <th>Metric</th>
+              <th>Before</th>
+              <th>After</th>
+              <th>Delta</th>
+            </tr>
+          </thead>
+          <tbody id="comparison-body"></tbody>
+        </table>
+      </section>
+
+      <section class="card">
+        <h2 class="h2">Decision</h2>
+        <div class="notice" id="decision-box">
+          <div style="display:flex; gap: var(--space-4); flex-wrap:wrap; align-items:center;">
+            <div>Confidence: <span class="badge" id="confidence-badge">-</span></div>
+            <div style="color: var(--muted);" id="impact-text"></div>
+          </div>
+          <p id="decision-recommendation" style="margin: var(--space-4) 0 0; color: var(--text);"></p>
+          <p id="decision-reasoning" style="margin: var(--space-3) 0 0;"></p>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script>
+    function fmtMs(n) {
+      return `${Number(n).toFixed(2)} ms`;
+    }
+
+    function fmtRps(n) {
+      return `${Number(n).toFixed(0)} req/s`;
+    }
+
+    function fmtInt(n) {
+      return Number(n).toLocaleString();
+    }
+
+    function fmtUsd(n) {
+      return `$${Number(n).toFixed(4)}`;
+    }
+
+    function badgeConfidence(score) {
+      if (score >= 0.8) return { cls: 'high', text: 'High' };
+      if (score >= 0.6) return { cls: 'medium', text: 'Medium' };
+      return { cls: 'low', text: 'Low' };
+    }
+
+    function setText(id, text) {
+      document.getElementById(id).textContent = text;
+    }
+
+    function show(id) {
+      document.getElementById(id).style.display = '';
+    }
+
+    function hide(id) {
+      document.getElementById(id).style.display = 'none';
+    }
+
+    function addRow(metric, before, after, delta) {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td>${metric}</td><td>${before}</td><td>${after}</td><td>${delta}</td>`;
+      document.getElementById('comparison-body').appendChild(tr);
+    }
+
+    async function loadReport() {
+      try {
+        const res = await fetch('/artifacts/report.json', { cache: 'no-store' });
+        if (!res.ok) throw new Error(`HTTP ${res.status} loading /artifacts/report.json`);
+        const report = await res.json();
+
+        hide('loading');
+        show('content');
+
+        const strategy = (report.agent_strategy || report.agentStrategy || 'llm').toString();
+        const ts = report.timestamp || report.run_timestamp || '-';
+
+        const stratBadge = document.getElementById('strategy-badge');
+        stratBadge.textContent = strategy.toUpperCase();
+
+        setText('timestamp', ts);
+
+        const baseline = report.baseline;
+        const after = report.after;
+        const decision = report.decision;
+
+        // Key metrics
+        setText('latency-value', fmtMs(after.median_latency_ms));
+        setText('throughput-value', fmtRps(after.requests_per_second));
+        setText('concurrency-value', String(after.concurrency));
+
+        const latencyDelta = after.median_latency_ms - baseline.median_latency_ms;
+        const rpsDelta = after.requests_per_second - baseline.requests_per_second;
+        const concDelta = after.concurrency - baseline.concurrency;
+
+        setText('latency-change', `Δ ${latencyDelta.toFixed(2)} ms`);
+        setText('throughput-change', `Δ ${rpsDelta.toFixed(0)} req/s`);
+        setText('concurrency-change', `Δ ${concDelta}`);
+
+        // Comparison table
+        document.getElementById('comparison-body').innerHTML = '';
+        addRow('Concurrency', baseline.concurrency, after.concurrency, concDelta);
+        addRow('Median latency', fmtMs(baseline.median_latency_ms), fmtMs(after.median_latency_ms), `${latencyDelta.toFixed(2)} ms`);
+        addRow('Avg latency', fmtMs(baseline.avg_latency_ms), fmtMs(after.avg_latency_ms), `${(after.avg_latency_ms - baseline.avg_latency_ms).toFixed(2)} ms`);
+        addRow('P95 latency', fmtMs(baseline.p95_latency_ms), fmtMs(after.p95_latency_ms), `${(after.p95_latency_ms - baseline.p95_latency_ms).toFixed(2)} ms`);
+        addRow('Throughput', fmtRps(baseline.requests_per_second), fmtRps(after.requests_per_second), `${rpsDelta.toFixed(0)} req/s`);
+        addRow('Total requests', fmtInt(baseline.total_requests), fmtInt(after.total_requests), fmtInt(after.total_requests - baseline.total_requests));
+        addRow('Cost estimate', fmtUsd(baseline.cost_estimate_usd), fmtUsd(after.cost_estimate_usd), fmtUsd(after.cost_estimate_usd - baseline.cost_estimate_usd));
+
+        // Decision
+        setText('decision-recommendation', decision.recommendation || '-');
+        setText('decision-reasoning', decision.reasoning || '-');
+        setText('impact-text', decision.impact_level ? `Impact: ${decision.impact_level}` : '');
+
+        const c = badgeConfidence(decision.confidence_score ?? 0);
+        const cb = document.getElementById('confidence-badge');
+        cb.classList.remove('high', 'medium', 'low');
+        cb.classList.add(c.cls);
+        cb.textContent = `${c.text} (${Math.round((decision.confidence_score ?? 0) * 100)}%)`;
+      } catch (e) {
+        hide('loading');
+        hide('content');
+        show('error');
+        setText('error-message', e.message || String(e));
+      }
+    }
+
+    loadReport();
+  </script>
+</body>
+</html>

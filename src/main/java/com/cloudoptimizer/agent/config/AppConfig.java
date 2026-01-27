@@ -1,5 +1,8 @@
 package com.cloudoptimizer.agent.config;
 
+import com.cloudoptimizer.agent.simulator.DemoWorkloadSimulator;
+import com.cloudoptimizer.agent.simulator.HttpRestWorkloadSimulator;
+import com.cloudoptimizer.agent.simulator.WorkloadSimulator;
 import org.springframework.ai.chat.ChatClient;
 import org.springframework.ai.ollama.OllamaChatClient;
 import org.springframework.beans.factory.annotation.Value;
@@ -93,5 +96,25 @@ public class AppConfig {
         executor.setAwaitTerminationSeconds(30);
         executor.initialize();
         return executor;
+    }
+
+    /**
+     * Configures the workload simulator based on application properties.
+     * 
+     * @param demoSimulator demo workload simulator bean
+     * @param httpSimulator HTTP REST workload simulator bean
+     * @param simulatorName name of the simulator to use (demo or http)
+     * @return configured WorkloadSimulator instance
+     */
+    @Bean
+    public WorkloadSimulator workloadSimulator(
+            DemoWorkloadSimulator demoSimulator,
+            HttpRestWorkloadSimulator httpSimulator,
+            @Value("${workload.simulator:demo}") String simulatorName) {
+        
+        if ("http".equalsIgnoreCase(simulatorName)) {
+            return httpSimulator;
+        }
+        return demoSimulator;
     }
 }

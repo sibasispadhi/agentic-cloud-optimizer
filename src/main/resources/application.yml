@@ -7,8 +7,6 @@ spring:
 
 server:
   port: ${SERVER_PORT:8080}
-  servlet:
-    context-path: /api
   compression:
     enabled: true
 
@@ -38,6 +36,10 @@ agent:
   artifacts-dir: artifacts
 
 # Workload Simulator Configuration
+# Run Mode Configuration
+run:
+  mode: ${RUN_MODE:web}  # Options: 'cli' (CommandLineRunner) or 'web' (WebSocket server)
+
 workload:
   simulator: demo  # Options: 'demo' (built-in) or 'http' (external REST API)
 
