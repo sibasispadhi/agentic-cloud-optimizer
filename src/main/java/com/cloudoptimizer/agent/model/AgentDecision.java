@@ -80,6 +80,21 @@ public class AgentDecision {
     private final Double heapConfidence;
 
     /**
+     * Indicates if this decision was triggered by an SLO breach.
+     * True when performance metrics exceeded defined SLO thresholds.
+     */
+    @JsonProperty("slo_breached")
+    @Builder.Default
+    private final boolean sloBreached = false;
+
+    /**
+     * Detailed reason for SLO breach (if sloBreached is true).
+     * Contains threshold values and actual measurements that triggered the breach.
+     */
+    @JsonProperty("breach_reason")
+    private final String breachReason;
+
+    /**
      * Impact level classification for optimization decisions.
      */
     public enum ImpactLevel {
