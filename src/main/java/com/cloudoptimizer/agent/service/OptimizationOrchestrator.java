@@ -228,6 +228,7 @@ public class OptimizationOrchestrator {
         baselineMap.put(MEDIAN_LATENCY_MS, baseline.getMedianLatencyMs());
         baselineMap.put(AVG_LATENCY_MS, baseline.getAvgLatencyMs());
         baselineMap.put(P95_LATENCY_MS, baseline.getP95LatencyMs());
+        baselineMap.put("p99_latency_ms", baseline.getP99LatencyMs());
         baselineMap.put(REQUESTS_PER_SECOND, baseline.getRequestsPerSecond());
         baselineMap.put(TOTAL_REQUESTS, baseline.getTotalRequests());
         baselineMap.put(COST_ESTIMATE_USD, baseline.getCostEstimateUsd());
@@ -241,6 +242,7 @@ public class OptimizationOrchestrator {
         afterMap.put(MEDIAN_LATENCY_MS, after.getMedianLatencyMs());
         afterMap.put(AVG_LATENCY_MS, after.getAvgLatencyMs());
         afterMap.put(P95_LATENCY_MS, after.getP95LatencyMs());
+        afterMap.put("p99_latency_ms", after.getP99LatencyMs());
         afterMap.put(REQUESTS_PER_SECOND, after.getRequestsPerSecond());
         afterMap.put(TOTAL_REQUESTS, after.getTotalRequests());
         afterMap.put(COST_ESTIMATE_USD, after.getCostEstimateUsd());
@@ -253,6 +255,15 @@ public class OptimizationOrchestrator {
         improvements.put("latency_change_ms", after.getMedianLatencyMs() - baseline.getMedianLatencyMs());
         improvements.put("latency_change_percent", 
                 calculatePercentChange(baseline.getMedianLatencyMs(), after.getMedianLatencyMs()));
+        
+        // p95/p99 improvements (critical for FinTech SLAs)
+        improvements.put("p95_change_ms", after.getP95LatencyMs() - baseline.getP95LatencyMs());
+        improvements.put("p95_change_percent",
+                calculatePercentChange(baseline.getP95LatencyMs(), after.getP95LatencyMs()));
+        improvements.put("p99_change_ms", after.getP99LatencyMs() - baseline.getP99LatencyMs());
+        improvements.put("p99_change_percent",
+                calculatePercentChange(baseline.getP99LatencyMs(), after.getP99LatencyMs()));
+        
         improvements.put("throughput_change_rps", after.getRequestsPerSecond() - baseline.getRequestsPerSecond());
         improvements.put("throughput_change_percent", 
                 calculatePercentChange(baseline.getRequestsPerSecond(), after.getRequestsPerSecond()));
