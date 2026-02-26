@@ -1,0 +1,596 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Agentic AI for Java Microservices — DevNexus 2026</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/reveal.js/4.6.1/reveal.min.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/reveal.js/4.6.1/theme/white.min.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css">
+<style>
+  :root {
+    --wm-blue:   #0053e2;
+    --wm-spark:  #ffc220;
+    --wm-red:    #ea1100;
+    --wm-green:  #2a8703;
+    --wm-gray10: #f2f2f2;
+    --wm-gray50: #b3b3b3;
+    --wm-gray100:#767676;
+    --wm-gray160:#2e2f32;
+    --wm-black:  #000000;
+    --wm-white:  #ffffff;
+  }
+  .reveal { font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; color: var(--wm-gray160); }
+  .reveal h1, .reveal h2, .reveal h3 { color: var(--wm-blue); font-weight: 700; text-transform: none; }
+  .reveal h1 { font-size: 2.2em; }
+  .reveal h2 { font-size: 1.6em; }
+  .reveal h3 { font-size: 1.2em; color: var(--wm-gray160); }
+  .reveal .slide-number { color: var(--wm-blue); font-weight: 600; }
+  .reveal section { text-align: left; }
+  .reveal ul, .reveal ol { font-size: 0.85em; line-height: 1.6; }
+  .reveal li { margin-bottom: 0.3em; }
+  .reveal pre { font-size: 0.55em; box-shadow: none; border: 2px solid var(--wm-gray10); border-radius: 8px; }
+  .reveal code { font-family: 'JetBrains Mono', 'Fira Code', monospace; }
+  .title-slide { text-align: center !important; }
+  .title-slide h1 { font-size: 2.0em; margin-bottom: 0.1em; }
+  .title-slide .subtitle { font-size: 1.1em; color: var(--wm-gray100); margin-bottom: 1em; }
+  .title-slide .author { font-size: 0.9em; color: var(--wm-gray160); }
+  .accent { color: var(--wm-spark); }
+  .blue { color: var(--wm-blue); }
+  .red { color: var(--wm-red); }
+  .green { color: var(--wm-green); }
+  .spark-bg { background: var(--wm-spark); color: var(--wm-black); padding: 2px 8px; border-radius: 4px; font-weight: 600; }
+  .blue-bg { background: var(--wm-blue); color: var(--wm-white); padding: 2px 8px; border-radius: 4px; }
+  .card { background: var(--wm-gray10); border-radius: 12px; padding: 20px; margin: 12px 0; border-left: 4px solid var(--wm-blue); }
+  .card-warn { border-left-color: var(--wm-spark); }
+  .card-danger { border-left-color: var(--wm-red); }
+  .card-success { border-left-color: var(--wm-green); }
+  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; align-items: start; }
+  .three-col { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; }
+  .metric-box { text-align: center; background: var(--wm-gray10); border-radius: 10px; padding: 16px; }
+  .metric-box .value { font-size: 2em; font-weight: 700; color: var(--wm-blue); }
+  .metric-box .label { font-size: 0.7em; color: var(--wm-gray100); }
+  .phase-item { background: var(--wm-gray10); border-radius: 8px; padding: 10px 14px; margin: 6px 0; font-size: 0.8em; }
+  .phase-num { display: inline-block; background: var(--wm-blue); color: white; width: 28px; height: 28px; border-radius: 50%; text-align: center; line-height: 28px; font-weight: 700; margin-right: 8px; font-size: 0.85em; }
+  .arch-layer { border-radius: 8px; padding: 12px 16px; margin: 8px 0; font-size: 0.75em; text-align: center; }
+  .layer-observe { background: #e3f0ff; border: 2px solid var(--wm-blue); }
+  .layer-reason { background: #fff8e0; border: 2px solid var(--wm-spark); }
+  .layer-enforce { background: #e8f5e3; border: 2px solid var(--wm-green); }
+  .arrow-down { text-align: center; font-size: 1.3em; color: var(--wm-gray100); margin: 2px 0; }
+  .compare-table { width: 100%; border-collapse: collapse; font-size: 0.75em; }
+  .compare-table th { background: var(--wm-blue); color: white; padding: 8px 12px; text-align: left; }
+  .compare-table td { padding: 8px 12px; border-bottom: 1px solid var(--wm-gray10); }
+  .compare-table tr:nth-child(even) { background: var(--wm-gray10); }
+  .qr-section { text-align: center !important; }
+  .tag { display: inline-block; padding: 2px 10px; border-radius: 20px; font-size: 0.65em; font-weight: 600; margin: 2px; }
+  .tag-blue { background: #e3f0ff; color: var(--wm-blue); }
+  .tag-spark { background: #fff8e0; color: #995213; }
+  .tag-green { background: #e8f5e3; color: var(--wm-green); }
+  .tag-red { background: #fce8e6; color: var(--wm-red); }
+  .reveal .progress { color: var(--wm-blue); height: 4px; }
+  .reveal .controls button { color: var(--wm-blue); }
+  .small { font-size: 0.7em; }
+  .fragment.current-visible { display: none; }
+  .fragment.current-visible.current-fragment { display: block; }
+</style>
+</head>
+<body>
+<div class="reveal">
+<div class="slides">
+
+<!-- ====== SLIDE 1: TITLE ====== -->
+<section class="title-slide" data-background-color="#ffffff">
+  <h1>Agentic AI for Java Microservices</h1>
+  <p class="subtitle">From Traditional Auto-Scaling to Self-Optimization</p>
+  <hr style="width:100px;border:2px solid var(--wm-spark);margin:20px auto;">
+  <p class="author">
+    <strong>Sibasis Padhi</strong><br>
+    <span style="color:var(--wm-gray100);font-size:0.85em;">DevNexus 2026 &nbsp;·&nbsp; Atlanta, GA</span>
+  </p>
+  <div style="margin-top:30px;">
+    <span class="tag tag-blue">Architecture Patterns</span>
+    <span class="tag tag-spark">FinTech</span>
+    <span class="tag tag-green">Live Demo</span>
+  </div>
+</section>
+
+<!-- ====== SLIDE 2: THE CHALLENGE ====== -->
+<section>
+  <h2>The FinTech Scaling Challenge</h2>
+  <div class="two-col">
+    <div>
+      <h3>The Reality</h3>
+      <ul>
+        <li><strong>Millions</strong> of financial transactions daily</li>
+        <li>Strict SLAs: <span class="blue">p99 &lt; 100ms</span></li>
+        <li>1 slow transaction = customer complaint</li>
+        <li>Over-provisioning costs <span class="red">$$$</span></li>
+      </ul>
+    </div>
+    <div>
+      <h3>Traditional Scaling Limits</h3>
+      <ul>
+        <li>Reactive, not predictive</li>
+        <li>Manual threshold tuning</li>
+        <li><span class="red">Median hides tail latency</span></li>
+        <li>Human bottleneck at 2 AM 😴</li>
+      </ul>
+    </div>
+  </div>
+  <div class="card card-warn" style="margin-top:20px;font-size:0.85em;">
+    💡 <strong>Key insight:</strong> CPU looks fine, median looks great — but <strong>p99 is on fire</strong> and your worst 1% of users are suffering.
+  </div>
+</section>
+
+<!-- ====== SLIDE 3: MEDIAN vs P99 ====== -->
+<section>
+  <h2>The Hidden Problem</h2>
+  <p style="font-size:0.85em;">Median latency lies. <strong>Tail latency tells the truth.</strong></p>
+  <div class="two-col">
+    <div class="card card-success">
+      <h3>System A ✅</h3>
+      <div class="three-col" style="text-align:center;font-size:0.8em;">
+        <div><strong>Median</strong><br><span class="blue" style="font-size:1.4em;">30ms</span></div>
+        <div><strong>p95</strong><br><span class="blue" style="font-size:1.4em;">42ms</span></div>
+        <div><strong>p99</strong><br><span class="green" style="font-size:1.4em;">50ms</span></div>
+      </div>
+      <p style="font-size:0.75em;margin-top:10px;">Every customer gets a great experience.</p>
+    </div>
+    <div class="card card-danger">
+      <h3>System B ❌</h3>
+      <div class="three-col" style="text-align:center;font-size:0.8em;">
+        <div><strong>Median</strong><br><span class="blue" style="font-size:1.4em;">30ms</span></div>
+        <div><strong>p95</strong><br><span style="color:#995213;font-size:1.4em;">180ms</span></div>
+        <div><strong>p99</strong><br><span class="red" style="font-size:1.4em;">5,000ms</span></div>
+      </div>
+      <p style="font-size:0.75em;margin-top:10px;">Same median! But 1% of 10M txns = <strong>100K angry customers.</strong></p>
+    </div>
+  </div>
+  <p class="small" style="margin-top:16px;">Traditional auto-scaling: <em>"CPU is fine, median looks good!"</em> → <strong>misses the real problem entirely.</strong></p>
+</section>
+
+<!-- ====== SLIDE 4: WHAT IF? ====== -->
+<section data-background-color="#0053e2">
+  <h2 style="color:white;">What If Your Microservices Could<br><span style="color:var(--wm-spark);">Optimize Themselves?</span></h2>
+  <p style="color:#cce0ff;font-size:0.9em;margin-top:30px;">Detect SLO breach → Analyze root cause → Apply safe fix → Validate improvement</p>
+  <p style="color:#cce0ff;font-size:0.9em;">All <strong style="color:white;">autonomously</strong>, in seconds, not hours.</p>
+</section>
+
+<!-- ====== SLIDE 5: ARCHITECTURE O-R-E ====== -->
+<section>
+  <h2>Pattern 1: Observe → Reason → Enforce</h2>
+  <div class="two-col">
+    <div>
+      <div class="arch-layer layer-observe">
+        <strong>🔍 OBSERVE</strong> (Deterministic)<br>
+        p95/p99 metrics · SLO breach detection · JMX/GC telemetry
+      </div>
+      <div class="arrow-down">▼</div>
+      <div class="arch-layer layer-reason">
+        <strong>🧠 REASON</strong> (AI-Powered)<br>
+        LLM analyzes multi-dimensional metrics · Explainable recommendations
+      </div>
+      <div class="arrow-down">▼</div>
+      <div class="arch-layer layer-enforce">
+        <strong>⚡ ENFORCE</strong> (Bounded Actions)<br>
+        ±25% max change · Cooldown windows · Auto-rollback
+      </div>
+    </div>
+    <div>
+      <h3 style="margin-top:0;">Why This Works</h3>
+      <ul>
+        <li><strong>Observe</strong> is deterministic — no AI hallucinations</li>
+        <li><strong>Reason</strong> uses LLM as <em>advisor</em>, not decision-maker</li>
+        <li><strong>Enforce</strong> constrains actions — safe by design</li>
+        <li>Each layer is independently testable</li>
+        <li>Works anywhere: local, Docker, K8s, VMs</li>
+      </ul>
+      <div class="card" style="font-size:0.75em;">
+        LLM proposes → Policy constrains → System verifies → Rollback exists
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ====== SLIDE 6: SLO BREACH DETECTION ====== -->
+<section>
+  <h2>SLO Breach Detection: The Trigger</h2>
+  <p style="font-size:0.85em;">When should the agent activate? <strong>SLO breach detection answers that.</strong></p>
+  <pre><code class="language-java">SloPolicy policy = SloPolicy.builder()
+    .targetP99Ms(100.0)           // p99 must be under 100ms
+    .breachThreshold(1.2)         // Breach if > 120ms (20% over)
+    .breachWindowIntervals(3)     // Must breach 3 consecutive checks
+    .build();
+
+// In the optimization orchestrator:
+sloBreachDetector.recordMetric(baseline);
+if (sloBreachDetector.isBreached(policy)) {
+    log.warn("🚨 SLO BREACH: " + detector.getBreachReason());
+    // → Trigger autonomous agent analysis
+}</code></pre>
+  <div class="two-col" style="margin-top:16px;">
+    <div class="card card-success" style="font-size:0.75em;">
+      <strong>✅ Normal Operation</strong><br>
+      p99 = 85ms → Under 120ms threshold<br>
+      Status: SLA COMPLIANT
+    </div>
+    <div class="card card-danger" style="font-size:0.75em;">
+      <strong>❌ Breach Detected</strong><br>
+      p99 = 135ms for 3 intervals → Over 120ms<br>
+      🚨 Triggering agent analysis!
+    </div>
+  </div>
+</section>
+
+<!-- ====== SLIDE 7: PATTERN 2 — BOUNDED ACTION SPACE ====== -->
+<section>
+  <h2>Pattern 2: Bounded Action Space</h2>
+  <p style="font-size:0.85em;">The agent is powerful — but <strong>constrained</strong>. Safety first.</p>
+  <div class="two-col">
+    <div>
+      <h3 style="color:var(--wm-red);">❌ Without Bounds</h3>
+      <pre><code class="language-text">LLM: "Reduce heap from 8GB to 1GB"
+     → -87.5% change
+     → System crashes
+     → Outage at 2 AM
+     → Incident report time 📝</code></pre>
+    </div>
+    <div>
+      <h3 style="color:var(--wm-green);">✅ With Bounds</h3>
+      <pre><code class="language-text">LLM: "Reduce heap from 8GB to 1GB"
+ARG: ❌ REJECTED (exceeds ±25% limit)
+
+LLM: "Reduce heap from 8GB to 6GB"
+ARG: ✅ APPROVED (-25%, within bounds)
+     → Change applied safely
+     → p99 improved 58%!</code></pre>
+    </div>
+  </div>
+  <div class="card" style="font-size:0.8em;margin-top:12px;">
+    <strong>Safety constraints:</strong> Max ±25% parameter delta · 10-min cooldown between changes · Auto-rollback if p99 worsens &gt;10% · Forbidden parameter list
+  </div>
+</section>
+
+<!-- ====== SLIDE 8: PATTERN 3 — LLM AS ADVISOR ====== -->
+<section>
+  <h2>Pattern 3: LLM as Advisor</h2>
+  <p style="font-size:0.85em;">The LLM <strong>advises</strong>. Deterministic code <strong>decides</strong>.</p>
+  <div class="two-col">
+    <div>
+      <h3>What the LLM Does</h3>
+      <ul>
+        <li>Interprets multi-dimensional metrics</li>
+        <li>Correlates heap usage, GC pauses, p99</li>
+        <li>Proposes bounded recommendations</li>
+        <li>Explains reasoning (audit trail)</li>
+      </ul>
+      <pre style="font-size:0.9em;"><code class="language-java">// Spring AI + Ollama integration
+@Service
+public class SpringAiLlmAgent {
+  AgentDecision decideWithHeapAnalysis(
+    RunResult baseline,
+    int currentConcurrency
+  );
+}</code></pre>
+    </div>
+    <div>
+      <h3>What the LLM Does NOT Do</h3>
+      <ul>
+        <li class="red">❌ Make final decisions</li>
+        <li class="red">❌ Apply changes directly</li>
+        <li class="red">❌ Bypass safety constraints</li>
+        <li class="red">❌ Access production systems</li>
+      </ul>
+      <div class="card card-warn" style="font-size:0.78em;">
+        🔑 <strong>Key principle:</strong> LLMs hallucinate. Governance doesn't.<br>
+        Deterministic policy enforcement is the safety net.
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ====== SLIDE 9: LIVE DEMO INTRO ====== -->
+<section data-background-color="#0053e2">
+  <h2 style="color:white;">Live Demo 🚀</h2>
+  <p style="color:var(--wm-spark);font-size:1.1em;font-weight:600;">Agentic Cloud Optimizer (ACO)</p>
+  <p style="color:#cce0ff;font-size:0.9em;">Java microservice simulating FinTech transaction load</p>
+  <div style="text-align:center;margin-top:30px;">
+    <div class="three-col" style="max-width:600px;margin:0 auto;">
+      <div style="color:white;">
+        <div style="font-size:2em;">📊</div>
+        <div style="font-size:0.8em;">Baseline Test</div>
+      </div>
+      <div style="color:var(--wm-spark);">
+        <div style="font-size:2em;">🧠</div>
+        <div style="font-size:0.8em;">AI Analysis</div>
+      </div>
+      <div style="color:white;">
+        <div style="font-size:2em;">⚡</div>
+        <div style="font-size:0.8em;">Optimized Run</div>
+      </div>
+    </div>
+  </div>
+  <p style="color:#cce0ff;font-size:0.75em;margin-top:30px;">Spring Boot · Spring AI · Ollama · Real-time WebSocket Dashboard</p>
+</section>
+
+<!-- ====== SLIDE 10: DEMO FLOW ====== -->
+<section>
+  <h2>Demo: The Self-Optimization Loop</h2>
+  <ol style="font-size:0.82em;">
+    <li><strong>Traditional monitoring:</strong> Median = 28ms — <em>"Looks fine!"</em></li>
+    <li class="fragment"><strong>Reveal p99:</strong> 150ms — <span class="red">breaching 100ms SLA! 🚨</span></li>
+    <li class="fragment"><strong>SLO breach detector fires</strong> (3 consecutive intervals)</li>
+    <li class="fragment"><strong>LLM analyzes:</strong> heap usage, GC pauses, thread contention, p99 latency</li>
+    <li class="fragment"><strong>Agent proposes:</strong> Reduce heap 8GB → 6GB, threads 4 → 3<br>
+      <span class="small">→ Validated against ±25% safety bounds ✅</span></li>
+    <li class="fragment"><strong>Apply & validate:</strong> Re-run load test with optimized settings</li>
+    <li class="fragment"><strong>Result:</strong> p99 <span class="green">150ms → 62ms</span> (58% improvement, back under SLA!) 🎉</li>
+  </ol>
+</section>
+
+<!-- ====== SLIDE 11: RESULTS ====== -->
+<section>
+  <h2>Before & After: The Value</h2>
+  <div class="three-col">
+    <div class="metric-box">
+      <div class="label">p99 Latency</div>
+      <div class="value" style="color:var(--wm-green);">-58%</div>
+      <div class="small">150ms → 62ms</div>
+    </div>
+    <div class="metric-box">
+      <div class="label">Infrastructure Cost</div>
+      <div class="value" style="color:var(--wm-green);">-25%</div>
+      <div class="small">8GB → 6GB heap</div>
+    </div>
+    <div class="metric-box">
+      <div class="label">GC Pressure</div>
+      <div class="value" style="color:var(--wm-green);">-62%</div>
+      <div class="small">2.1 → 0.8 pauses/s</div>
+    </div>
+  </div>
+  <div class="card card-success" style="margin-top:20px;font-size:0.85em;">
+    <strong>Impact on 10M daily transactions:</strong><br>
+    ✅ 100K transactions (p99) now meet SLA<br>
+    ✅ MTTR: 45 minutes → <strong>68 seconds</strong><br>
+    ✅ Estimated annual savings: <strong>$150K–$200K</strong> in cloud costs
+  </div>
+</section>
+
+<!-- ====== SLIDE 12: PATTERNS SUMMARY ====== -->
+<section>
+  <h2>5 Architecture Patterns</h2>
+  <p style="font-size:0.8em;color:var(--wm-gray100);">Reusable in <strong>any</strong> Java microservice — not ACO-specific.</p>
+  <table class="compare-table">
+    <thead>
+      <tr><th style="width:30%;">Pattern</th><th>What It Solves</th><th style="width:25%;">Key Principle</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>1. Observe-Reason-Enforce</strong></td>
+        <td>Core agentic architecture</td>
+        <td>Separation of concerns</td>
+      </tr>
+      <tr>
+        <td><strong>2. Bounded Action Space</strong></td>
+        <td>Preventing runaway automation</td>
+        <td>Safety constraints</td>
+      </tr>
+      <tr>
+        <td><strong>3. LLM as Advisor</strong></td>
+        <td>Hallucination risk</td>
+        <td>Advisory, not autonomous</td>
+      </tr>
+      <tr>
+        <td><strong>4. Closed-Loop Automation</strong></td>
+        <td>Detect → Analyze → Act → Validate</td>
+        <td>Self-healing feedback</td>
+      </tr>
+      <tr>
+        <td><strong>5. Multi-Agent Reasoning</strong></td>
+        <td>Simple rules + LLM intelligence</td>
+        <td>Hybrid deterministic + AI</td>
+      </tr>
+    </tbody>
+  </table>
+  <p class="small" style="margin-top:12px;">📄 Full documentation: <code>docs/ARCHITECTURE_PATTERNS.md</code> in the GitHub repo</p>
+</section>
+
+<!-- ====== SLIDE 13: CLOSED-LOOP & MULTI-AGENT ====== -->
+<section>
+  <h2>Patterns 4 & 5: Closed-Loop + Multi-Agent</h2>
+  <div class="two-col">
+    <div>
+      <h3>Closed-Loop Automation</h3>
+      <div style="font-size:0.75em;text-align:center;">
+        <div class="phase-item"><span class="phase-num">1</span> Detect SLO breach</div>
+        <div class="arrow-down">▼</div>
+        <div class="phase-item"><span class="phase-num">2</span> Agent analyzes root cause</div>
+        <div class="arrow-down">▼</div>
+        <div class="phase-item"><span class="phase-num" style="background:var(--wm-spark);color:black;">3</span> Apply bounded fix</div>
+        <div class="arrow-down">▼</div>
+        <div class="phase-item"><span class="phase-num" style="background:var(--wm-green);">4</span> Validate improvement</div>
+        <div class="arrow-down">↻</div>
+      </div>
+    </div>
+    <div>
+      <h3>Multi-Agent Reasoning</h3>
+      <div class="card" style="font-size:0.78em;">
+        <strong>SimpleAgent</strong> (rule-based)<br>
+        Fast, deterministic, no LLM needed<br>
+        <span class="tag tag-green">Production-safe</span>
+      </div>
+      <div class="card" style="font-size:0.78em;border-left-color:var(--wm-spark);">
+        <strong>SpringAiLlmAgent</strong> (AI-powered)<br>
+        Multi-dimensional analysis, nuanced reasoning<br>
+        <span class="tag tag-spark">Context-aware</span>
+      </div>
+      <p style="font-size:0.75em;margin-top:8px;">Same interface, swappable at config time.<br>
+      Start with rules → graduate to LLM.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ====== SLIDE 14: CODE EXAMPLES ====== -->
+<section>
+  <h2>Code You Can Use Today</h2>
+  <div class="two-col">
+    <div>
+      <h3>p99 Percentile Tracking</h3>
+      <pre><code class="language-java">// In RunResult model
+private final double p95LatencyMs;
+private final double p99LatencyMs;
+
+// In LoadRunner
+double p99 = calculatePercentile(
+  sortedLatencies, 99);
+
+// In OptimizationOrchestrator
+improvements.put("p99_change_percent",
+  calculatePercentChange(
+    baseline.getP99LatencyMs(),
+    after.getP99LatencyMs()));</code></pre>
+    </div>
+    <div>
+      <h3>SLO Breach → Agent Trigger</h3>
+      <pre><code class="language-java">// Orchestrator integration
+sloBreachDetector.recordMetric(baseline);
+
+if (sloBreachDetector.isBreached(policy)) {
+  emitEvent(reasoningUpdate(
+    "🚨 SLO BREACH! p99=" +
+    baseline.getP99LatencyMs() +
+    "ms exceeds threshold"));
+  // Agent activates automatically
+}
+
+// Spring AI + Ollama
+decision = llmAgent
+  .decideWithHeapAnalysis(
+    baseline, concurrency);</code></pre>
+    </div>
+  </div>
+</section>
+
+<!-- ====== SLIDE 15: PRACTICAL ROADMAP ====== -->
+<section>
+  <h2>Your Practical Roadmap</h2>
+  <p style="font-size:0.8em;color:var(--wm-gray100);">10–12 weeks from traditional auto-scaling to self-optimization</p>
+  <div style="font-size:0.78em;">
+    <div class="phase-item"><span class="phase-num">1</span><strong>OBSERVE</strong> — Add p95/p99 tracking. Stop relying on median. <span class="tag tag-blue">Week 1-2</span></div>
+    <div class="phase-item"><span class="phase-num">2</span><strong>MONITOR</strong> — SLO breach detection with configurable thresholds. <span class="tag tag-blue">Week 3-4</span></div>
+    <div class="phase-item"><span class="phase-num" style="background:var(--wm-spark);color:black;">3</span><strong>ADVISE</strong> — Integrate LLM (Ollama/API). Agent recommends, human approves. <span class="tag tag-spark">Week 5-7</span></div>
+    <div class="phase-item"><span class="phase-num" style="background:var(--wm-green);">4</span><strong>AUTOMATE</strong> — Bounded self-optimization. Safety constraints + auto-rollback. <span class="tag tag-green">Week 8-10</span></div>
+    <div class="phase-item"><span class="phase-num" style="background:var(--wm-gray160);">5</span><strong>PREDICT</strong> — Trend analysis, proactive optimization before breach. <span class="tag tag-blue">Week 11-12</span></div>
+  </div>
+  <div class="card" style="font-size:0.75em;margin-top:12px;">
+    📝 <strong>Team size:</strong> 2–3 devs + 1 SRE &nbsp;·&nbsp; <strong>Prerequisites:</strong> Java 17+, Spring Boot &nbsp;·&nbsp; 📄 Full guide: <code>docs/PRACTICAL_ROADMAP.md</code>
+  </div>
+</section>
+
+<!-- ====== SLIDE 16: THE EVOLUTION STORY ====== -->
+<section>
+  <h2>The Evolution: Traditional → AI-Driven</h2>
+  <table class="compare-table">
+    <thead>
+      <tr><th></th><th>Traditional</th><th style="background:var(--wm-green);">AI-Driven</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><strong>Metrics</strong></td><td>Median, CPU %</td><td>p95/p99 latency, heap, GC</td></tr>
+      <tr><td><strong>Detection</strong></td><td>Manual alerts, pager</td><td>Automatic SLO breach</td></tr>
+      <tr><td><strong>Analysis</strong></td><td>Engineer at 2 AM</td><td>LLM in seconds</td></tr>
+      <tr><td><strong>Action</strong></td><td>Manual deploy & pray</td><td>Bounded, validated change</td></tr>
+      <tr><td><strong>Validation</strong></td><td>"Seems fine now?"</td><td>Automated before/after</td></tr>
+      <tr><td><strong>MTTR</strong></td><td class="red">45 minutes</td><td class="green"><strong>68 seconds</strong></td></tr>
+      <tr><td><strong>Rollback</strong></td><td>Another manual deploy</td><td>Automatic if p99 worsens</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ====== SLIDE 17: KEY TAKEAWAYS ====== -->
+<section>
+  <h2>Key Takeaways</h2>
+  <div style="font-size:0.88em;">
+    <div class="card" style="margin-bottom:10px;">
+      <strong>1. Track p99, not median.</strong><br>
+      Tail latency is where SLA breaches and customer pain live.
+    </div>
+    <div class="card card-warn" style="margin-bottom:10px;">
+      <strong>2. LLM as advisor, not dictator.</strong><br>
+      Deterministic governance prevents hallucination-driven outages.
+    </div>
+    <div class="card card-success" style="margin-bottom:10px;">
+      <strong>3. Bounded autonomy is the sweet spot.</strong><br>
+      ±25% limits, cooldowns, and auto-rollback make self-optimization safe.
+    </div>
+    <div class="card" style="border-left-color:var(--wm-spark);">
+      <strong>4. Start small, evolve incrementally.</strong><br>
+      You can reach Phase 3 in 4 weeks. Phase 5 in 12 weeks.
+    </div>
+  </div>
+</section>
+
+<!-- ====== SLIDE 18: TECH STACK ====== -->
+<section>
+  <h2>Tech Stack & Resources</h2>
+  <div class="two-col">
+    <div>
+      <h3>Built With</h3>
+      <ul style="font-size:0.85em;">
+        <li><strong>Java 17</strong> + Spring Boot 3</li>
+        <li><strong>Spring AI</strong> (LLM integration)</li>
+        <li><strong>Ollama</strong> (local LLM, no cloud dependency)</li>
+        <li><strong>JMX</strong> (GC metrics collection)</li>
+        <li><strong>WebSocket</strong> (real-time dashboard)</li>
+        <li><strong>Jackson</strong> (JSON reports)</li>
+      </ul>
+    </div>
+    <div>
+      <h3>Get the Code</h3>
+      <div class="card" style="text-align:center;font-size:0.85em;">
+        <strong>GitHub Repository</strong><br>
+        <code style="font-size:0.9em;">github.com/sibasispadhi/<br>agentic-cloud-optimizer</code>
+        <hr style="border-color:var(--wm-gray50);">
+        <span class="tag tag-blue">5 Architecture Patterns</span><br>
+        <span class="tag tag-green">10-12 Week Roadmap</span><br>
+        <span class="tag tag-spark">41 Tests Passing</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ====== SLIDE 19: Q&A ====== -->
+<section class="title-slide" data-background-color="#0053e2">
+  <h1 style="color:white;">Thank You! 🙏</h1>
+  <p style="color:var(--wm-spark);font-size:1.2em;font-weight:600;">Questions?</p>
+  <hr style="width:80px;border:2px solid var(--wm-spark);margin:20px auto;">
+  <p style="color:#cce0ff;font-size:0.9em;">
+    <strong style="color:white;">Sibasis Padhi</strong><br>
+    DevNexus 2026 · Atlanta, GA
+  </p>
+  <div style="margin-top:24px;">
+    <span class="tag" style="background:rgba(255,255,255,0.2);color:white;">GitHub: sibasispadhi</span>
+  </div>
+  <p style="color:#99bbee;font-size:0.7em;margin-top:30px;">Slides built with reveal.js · Powered by ☕ and 🐶</p>
+</section>
+
+</div><!-- /slides -->
+</div><!-- /reveal -->
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/reveal.js/4.6.1/reveal.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/reveal.js/4.6.1/plugin/highlight/highlight.min.js"></script>
+<script>
+  Reveal.initialize({
+    hash: true,
+    slideNumber: 'c/t',
+    width: 1200,
+    height: 700,
+    margin: 0.06,
+    transition: 'slide',
+    transitionSpeed: 'default',
+    plugins: [ RevealHighlight ],
+    // Speaker notes
+    showNotes: false,
+  });
+</script>
+</body>
+</html>
