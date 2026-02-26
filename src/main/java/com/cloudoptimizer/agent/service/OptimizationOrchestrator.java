@@ -45,6 +45,7 @@ public class OptimizationOrchestrator {
     private final MetricsLogger metricsLogger;
     private final SimpleAgent simpleAgent;
     private final SpringAiLlmAgent llmAgent;
+    private final SloBreachDetector sloBreachDetector;
     private final SimpMessagingTemplate messagingTemplate;
     private final ObjectMapper objectMapper;
     
@@ -60,15 +61,29 @@ public class OptimizationOrchestrator {
     @Value("${agent.strategy:llm}")
     private String agentStrategy;
 
+    @Value("${slo.target-p99-ms:100.0}")
+    private double sloTargetP99Ms;
+
+    @Value("${slo.breach-threshold:1.2}")
+    private double sloBreachThreshold;
+
+    @Value("${slo.breach-window-intervals:3}")
+    private int sloBreachWindowIntervals;
+
+    @Value("${slo.enabled:true}")
+    private boolean sloEnabled;
+
     public OptimizationOrchestrator(WorkloadSimulator workloadSimulator,
                                    MetricsLogger metricsLogger,
                                    SimpleAgent simpleAgent,
                                    SpringAiLlmAgent llmAgent,
+                                   SloBreachDetector sloBreachDetector,
                                    SimpMessagingTemplate messagingTemplate) {
         this.workloadSimulator = workloadSimulator;
         this.metricsLogger = metricsLogger;
         this.simpleAgent = simpleAgent;
         this.llmAgent = llmAgent;
+        this.sloBreachDetector = sloBreachDetector;
         this.messagingTemplate = messagingTemplate;
         this.objectMapper = new ObjectMapper()
                 .registerModule(new JavaTimeModule())
@@ -132,6 +147,47 @@ public class OptimizationOrchestrator {
                 String.format("Baseline complete! Median latency: %.2fms, RPS: %.0f", 
                         baseline.getMedianLatencyMs(), baseline.getRequestsPerSecond())));
 
+        // Phase 1.5: SLO Breach Detection
+        boolean sloBreached = false;
+        String breachReason = null;
+
+        if (sloEnabled) {
+            emitEvent(ProgressEvent.phaseUpdate(OptimizationPhase.SLO_CHECKING,
+                    String.format("Checking SLO compliance (p99 target: %.0fms, breach at: %.0fms)...",
+                            sloTargetP99Ms, sloTargetP99Ms * sloBreachThreshold)));
+
+            SloPolicy sloPolicy = SloPolicy.builder()
+                    .targetP99Ms(sloTargetP99Ms)
+                    .breachThreshold(sloBreachThreshold)
+                    .breachWindowIntervals(sloBreachWindowIntervals)
+                    .description(String.format("p99 < %.0fms (breach at %.0fms over %d intervals)",
+                            sloTargetP99Ms, sloTargetP99Ms * sloBreachThreshold, sloBreachWindowIntervals))
+                    .build();
+
+            sloBreachDetector.recordMetric(baseline);
+            sloBreached = sloBreachDetector.isBreached(sloPolicy);
+            breachReason = sloBreachDetector.getBreachReason();
+
+            if (sloBreached) {
+                emitEvent(ProgressEvent.reasoningUpdate(
+                        String.format("🚨 SLO BREACH DETECTED! p99=%.2fms exceeds %.0fms threshold",
+                                baseline.getP99LatencyMs(), sloTargetP99Ms * sloBreachThreshold)));
+                emitEvent(ProgressEvent.reasoningUpdate("→ Triggering autonomous agent for root cause analysis"));
+                log.warn("SLO breach detected: {}", breachReason);
+            } else {
+                emitEvent(ProgressEvent.reasoningUpdate(
+                        String.format("✅ SLO compliant: p99=%.2fms (target: <%.0fms)",
+                                baseline.getP99LatencyMs(), sloTargetP99Ms * sloBreachThreshold)));
+                log.info("SLO compliant: p99={}ms", baseline.getP99LatencyMs());
+            }
+        } else {
+            emitEvent(ProgressEvent.reasoningUpdate("ℹ️ SLO breach detection disabled"));
+        }
+
+        // Capture SLO state for inclusion in decision
+        final boolean finalSloBreached = sloBreached;
+        final String finalBreachReason = breachReason;
+
         // Phase 2: LLM Analysis
         Thread.sleep(1000); // Wait for metrics to flush
         
@@ -186,10 +242,16 @@ public class OptimizationOrchestrator {
                 String.format("Optimized test complete! Median latency: %.2fms, RPS: %.0f", 
                         after.getMedianLatencyMs(), after.getRequestsPerSecond())));
 
+        // Record post-optimization metric for ongoing SLO monitoring
+        if (sloEnabled) {
+            sloBreachDetector.recordMetric(after);
+        }
+
         // Phase 4: Generate Report
         emitEvent(ProgressEvent.phaseUpdate(OptimizationPhase.GENERATING_REPORT, "Generating comparison report..."));
         
-        Map<String, Object> report = generateReport(baseline, after, decision, agentStrategy);
+        Map<String, Object> report = generateReport(baseline, after, decision, agentStrategy,
+                finalSloBreached, finalBreachReason);
         writeJson(artifactsDir.resolve("report.json"), report);
         
         emitEvent(ProgressEvent.phaseUpdate(OptimizationPhase.COMPLETE, "Optimization complete!"));
@@ -217,7 +279,8 @@ public class OptimizationOrchestrator {
     }
 
     private Map<String, Object> generateReport(RunResult baseline, RunResult after, 
-                                               AgentDecision decision, String agentStrategy) {
+                                               AgentDecision decision, String agentStrategy,
+                                               boolean sloBreached, String breachReason) {
         Map<String, Object> report = new HashMap<>();
         
         report.put("agent_strategy", agentStrategy);
@@ -285,6 +348,21 @@ public class OptimizationOrchestrator {
         }
         decisionMap.put("impact_level", decision.getImpactLevel().toString());
         report.put("decision", decisionMap);
+
+        // SLO compliance section
+        Map<String, Object> sloMap = new HashMap<>();
+        sloMap.put("enabled", sloEnabled);
+        sloMap.put("breached", sloBreached);
+        if (breachReason != null) {
+            sloMap.put("breach_reason", breachReason);
+        }
+        sloMap.put("target_p99_ms", sloTargetP99Ms);
+        sloMap.put("breach_threshold_ms", sloTargetP99Ms * sloBreachThreshold);
+        sloMap.put("baseline_p99_ms", baseline.getP99LatencyMs());
+        sloMap.put("after_p99_ms", after.getP99LatencyMs());
+        boolean sloRestoredAfter = after.getP99LatencyMs() <= (sloTargetP99Ms * sloBreachThreshold);
+        sloMap.put("slo_restored_after_optimization", sloRestoredAfter);
+        report.put("slo_compliance", sloMap);
         
         return report;
     }

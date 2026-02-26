@@ -35,6 +35,13 @@ agent:
   target-latency-ms: 100.0
   artifacts-dir: artifacts
 
+# SLO Breach Detection (Monitoring/Alerting layer)
+slo:
+  target-p99-ms: ${SLO_TARGET_P99_MS:100.0}
+  breach-threshold: ${SLO_BREACH_THRESHOLD:1.2}
+  breach-window-intervals: ${SLO_BREACH_WINDOW:3}
+  enabled: ${SLO_ENABLED:true}
+
 # Workload Simulator Configuration
 # Run Mode Configuration
 run:

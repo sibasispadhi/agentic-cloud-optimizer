@@ -11,6 +11,7 @@ public enum OptimizationPhase {
     INITIALIZING("Initializing", 0),
     BASELINE_RUNNING("Running Baseline Test", 25),
     BASELINE_COMPLETE("Baseline Complete", 35),
+    SLO_CHECKING("Checking SLO Compliance", 40),
     LLM_ANALYZING("AI Analyzing Metrics", 50),
     LLM_COMPLETE("AI Decision Ready", 60),
     OPTIMIZATION_RUNNING("Running Optimized Test", 75),
