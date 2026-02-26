@@ -10,22 +10,30 @@
 ## ⚠️ Pre-Demo Checklist (Do 30 min before)
 
 ```bash
-# 1. Reset demo state
+# 1. Reset demo state (cleans artifacts + rebuilds jar + checks Ollama)
 ./scripts/reset-demo.sh
 
-# 2. Verify Ollama is running
-curl -s http://localhost:11434/api/tags | head -5
-# Expected: JSON with model list including llama3.2:1b
+# 2. START THE WEB SERVER (don't skip this!)
+./scripts/run-web-ui.sh &
+# Wait ~10 seconds for Spring Boot to start, then verify:
+curl -s http://localhost:8080/live-dashboard.html | head -3
+# Expected: <!DOCTYPE html>
 
-# 3. Build the project (if not already)
-mvn clean package -DskipTests
-
-# 4. Open the live dashboard in browser (keep it in background)
+# 3. Open the live dashboard in your browser
 open http://localhost:8080/live-dashboard.html
+# Verify: WebSocket dot shows green "Connected" status
 
-# 5. Open slide deck in another tab
-open presentation/devnexus-2026-slides.html
+# 4. Open OFFLINE slide deck (no WiFi needed!)
+open presentation/devnexus-2026-slides-OFFLINE.html
+# Fallback (requires internet):
+# open presentation/devnexus-2026-slides.html
+
+# 5. Quick smoke test - verify Ollama is responding
+curl -s http://localhost:11434/api/tags | python3 -c "import sys,json; m=json.load(sys.stdin).get('models',[]); print('Models:', [x['name'] for x in m]) if m else print('⚠️  No models found!')"
+# If Ollama is down: ollama serve (then: ollama pull llama3.2:1b)
 ```
+
+> 💡 **Tip:** Keep two terminal tabs open — one tailing the server log, one ready for the demo commands. Use `./scripts/run-web-ui.sh 2>&1 | tee /tmp/aco-demo.log &` and `tail -f /tmp/aco-demo.log` in tab 2.
 
 ---
 
