@@ -1,0 +1,68 @@
+{
+  "agent_strategy": "llm",
+  "timestamp": "2026-02-26T13:01:45.000Z",
+  "baseline": {
+    "concurrency": 4,
+    "median_latency_ms": 28.99,
+    "avg_latency_ms": 31.4,
+    "p95_latency_ms": 95.4,
+    "p99_latency_ms": 150.3,
+    "requests_per_second": 135.3,
+    "total_requests": 1353,
+    "cost_estimate_usd": 0.0054,
+    "heap_metrics": {
+      "heap_size_mb": 8192,
+      "heap_used_mb": 53,
+      "heap_usage_percent": 0.65,
+      "gc_frequency_per_sec": 2.1,
+      "gc_pause_time_avg_ms": 2.1
+    }
+  },
+  "after": {
+    "concurrency": 3,
+    "median_latency_ms": 25.3,
+    "avg_latency_ms": 27.8,
+    "p95_latency_ms": 58.7,
+    "p99_latency_ms": 62.4,
+    "requests_per_second": 102.3,
+    "total_requests": 1023,
+    "cost_estimate_usd": 0.0041,
+    "heap_metrics": {
+      "heap_size_mb": 6144,
+      "heap_used_mb": 26,
+      "heap_usage_percent": 0.42,
+      "gc_frequency_per_sec": 0.8,
+      "gc_pause_time_avg_ms": 0.8
+    }
+  },
+  "improvements": {
+    "latency_change_ms": -3.69,
+    "latency_change_percent": -12.73,
+    "p95_change_ms": -36.7,
+    "p95_change_percent": -38.47,
+    "p99_change_ms": -87.9,
+    "p99_change_percent": -58.48,
+    "throughput_change_rps": -33.0,
+    "throughput_change_percent": -24.39,
+    "concurrency_change": -1
+  },
+  "decision": {
+    "recommendation": "Reduce concurrency to 3 threads and heap to 6144 MB",
+    "recommended_heap_size_mb": 6144,
+    "reasoning": "p99 latency of 150.3ms exceeds the 100ms SLA threshold. Heap usage at 0.65% (53MB of 8192MB) indicates severe over-provisioning. GC frequency at 2.1/sec suggests fragmented allocation patterns. Reducing heap to 6144MB will improve GC efficiency. Reducing threads from 4 to 3 decreases context-switching overhead while maintaining sufficient throughput for current load.",
+    "confidence_score": 0.94,
+    "concurrency_confidence": 0.92,
+    "heap_confidence": 0.96,
+    "impact_level": "MEDIUM"
+  },
+  "slo_compliance": {
+    "enabled": true,
+    "breached": true,
+    "breach_reason": "SLO BREACH detected over 3 consecutive intervals:\n  - Interval 1: p99=150.3ms > 120.0ms\n  - Interval 2: p99=148.7ms > 120.0ms\n  - Interval 3: p99=151.2ms > 120.0ms\n  Policy: p99 < 100ms (breach at 120ms over 3 intervals)",
+    "target_p99_ms": 100.0,
+    "breach_threshold_ms": 120.0,
+    "baseline_p99_ms": 150.3,
+    "after_p99_ms": 62.4,
+    "slo_restored_after_optimization": true
+  }
+}

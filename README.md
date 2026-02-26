@@ -1,8 +1,26 @@
 # Agent Cloud Optimizer (ACO)
 
-Autonomous, **LLM-powered** JVM performance optimizer for Java services.
+> **Reference implementation** of agentic AI architecture patterns for Java microservices.  
+> Presented at **DevNexus 2026** — *"Agentic AI for Java Microservices: From Traditional Scaling to Self-Optimization"*
 
-Production-ready implementation that can run locally or in your infrastructure.
+Autonomous, **LLM-powered** JVM performance optimizer for Java services — demonstrating how self-optimizing systems work in FinTech-scale environments.  
+Runs locally, in Docker, on VMs, or in Kubernetes. No cloud dependency required.
+
+---
+
+## 🎯 DevNexus 2026 Resources
+
+| Resource | Link |
+|----------|------|
+| 🎞️ Slide Deck | [`presentation/devnexus-2026-slides.html`](presentation/devnexus-2026-slides.html) |
+| 📊 Architecture Patterns | [`docs/ARCHITECTURE_PATTERNS.md`](docs/ARCHITECTURE_PATTERNS.md) |
+| 📍 Practical Roadmap | [`docs/PRACTICAL_ROADMAP.md`](docs/PRACTICAL_ROADMAP.md) |
+| 🎬 Demo Script | [`docs/DEMO_SCRIPT.md`](docs/DEMO_SCRIPT.md) |
+| 🧹 Reset Demo | `./scripts/reset-demo.sh` |
+
+**Abstract promise checklist:** 8/8 fulfilled ✅ — p99 tracking, SLO breach detection, agentic reasoning, bounded autonomy, architecture patterns, practical roadmap, FinTech context, evolution story.
+
+---
 
 ---
 
@@ -125,12 +143,15 @@ Legacy: `demo.html` now just points you to `/results.html`.
 
 ## Features
 
+- ✅ **SLO Breach Detection**: Monitors p99 latency against configurable SLO thresholds — triggers agent automatically
+- ✅ **p95/p99 Percentile Tracking**: Tail latency metrics critical for FinTech transaction SLAs
+- ✅ **Agentic Closed-Loop**: SLO breach → LLM analyzes → bounded fix → validates improvement
 - ✅ **Concurrency Optimization**: Automatically tunes thread pool sizes
 - ✅ **Heap Optimization**: Analyzes GC metrics and recommends optimal JVM heap size
-- ✅ **LLM-Powered Analysis**: Uses local Ollama for intelligent reasoning
-- ✅ **Rule-Based Fallback**: SimpleAgent provides fast, reliable decisions
+- ✅ **LLM-Powered Analysis**: Uses local Ollama for intelligent reasoning (no cloud required)
+- ✅ **Rule-Based Fallback**: SimpleAgent provides fast, deterministic decisions
 - ✅ **Explainable AI**: Full reasoning traces for every decision
-- ✅ **Real-time Dashboard**: WebSocket-powered live monitoring
+- ✅ **Real-time Dashboard**: WebSocket-powered live monitoring with SLO status
 
 ## Optional docs
 

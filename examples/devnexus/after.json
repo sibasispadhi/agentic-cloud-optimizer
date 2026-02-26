@@ -1,0 +1,25 @@
+{
+  "timestamp": "2026-02-26T13:01:30.000Z",
+  "concurrency": 3,
+  "duration_seconds": 10,
+  "total_requests": 1023,
+  "successful_requests": 1023,
+  "failed_requests": 0,
+  "requests_per_second": 102.3,
+  "median_latency_ms": 25.3,
+  "avg_latency_ms": 27.8,
+  "min_latency_ms": 9.1,
+  "max_latency_ms": 89.4,
+  "p95_latency_ms": 58.7,
+  "p99_latency_ms": 62.4,
+  "cost_estimate_usd": 0.0041,
+  "heap_metrics": {
+    "heap_size_mb": 6144,
+    "heap_used_mb": 26,
+    "heap_usage_percent": 0.42,
+    "gc_count": 1,
+    "gc_time_ms": 8,
+    "gc_pause_time_avg_ms": 0.8,
+    "gc_frequency_per_sec": 0.8
+  }
+}
