@@ -12,15 +12,11 @@ Runs locally, in Docker, on VMs, or in Kubernetes. No cloud dependency required.
 
 | Resource | Link |
 |----------|------|
-| 🎞️ Slide Deck | [`presentation/devnexus-2026-slides.html`](presentation/devnexus-2026-slides.html) |
 | 📊 Architecture Patterns | [`docs/ARCHITECTURE_PATTERNS.md`](docs/ARCHITECTURE_PATTERNS.md) |
 | 📍 Practical Roadmap | [`docs/PRACTICAL_ROADMAP.md`](docs/PRACTICAL_ROADMAP.md) |
-| 🎬 Demo Script | [`docs/DEMO_SCRIPT.md`](docs/DEMO_SCRIPT.md) |
 | 🧹 Reset Demo | `./scripts/reset-demo.sh` |
 
-**Abstract promise checklist:** 8/8 fulfilled ✅ — p99 tracking, SLO breach detection, agentic reasoning, bounded autonomy, architecture patterns, practical roadmap, FinTech context, evolution story.
-
----
+> 🎬 **Slide deck & demo script** will be published after the DevNexus 2026 presentation!
 
 ---
 
@@ -158,7 +154,6 @@ Legacy: `demo.html` now just points you to `/results.html`.
 - What this is / isn't: **[docs/WHAT_THIS_IS.md](docs/WHAT_THIS_IS.md)**
 - Windows setup: **[docs/WINDOWS_SETUP.md](docs/WINDOWS_SETUP.md)**
 - Example outputs: **[examples/README.md](examples/README.md)**
-- Heap optimization details: **[HEAP_OPTIMIZATION_STATUS.md](HEAP_OPTIMIZATION_STATUS.md)**
 
 ## License
 
