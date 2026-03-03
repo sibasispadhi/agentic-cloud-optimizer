@@ -141,7 +141,7 @@ Please share additional details regarding audience profile, event format, and ti
 Best regards,
 Sibasis Padhi
 Staff Software Engineer
-Walmart Global Tech
+Global Technology Company
 
 5. Critical Due Diligence Questions (Before Confirming)
 Ask them:
@@ -246,10 +246,10 @@ What to instrument for decision traceability (inputs → actions → outcomes) i
 A leader-friendly checklist for safe orchestration changes and rollback readiness
 
 Presenter info:
-Sibasis Padhi — Staff Software Engineer — Walmart Global Tech
+Sibasis Padhi — Staff Software Engineer — Global Technology Company
 
 Short bio (optional):
-Sibasis Padhi is a Staff Software Engineer at Walmart Global Tech specializing in cloud-native microservices and performance optimization for high-volume financial systems. His work focuses on measurable reliability, distributed tracing, and operational guardrails for modern cloud workloads.
+Sibasis Padhi is a Staff Software Engineer at Global Technology Company specializing in cloud-native microservices and performance optimization for high-volume financial systems. His work focuses on measurable reliability, distributed tracing, and operational guardrails for modern cloud workloads.
 
 Headshot:
 Attached (or: “I’ll attach a web-ready headshot (JPG/PNG) in my next reply.”)
@@ -261,7 +261,7 @@ Please confirm the exact session time once assigned, and I’ll plan to share th
 
 Kind regards,
 Sibasis Padhi
-Staff Software Engineer, Walmart Global Tech
+Staff Software Engineer, Global Technology Company
 
 
 You said:
@@ -316,10 +316,10 @@ How CNCF-aligned tooling (Kubernetes, OpenTelemetry, policy engines) supports me
 Presenter Information:
 Sibasis Padhi
 Staff Software Engineer
-Walmart Global Tech
+Global Technology Company
 
 Short Bio (optional):
-Sibasis Padhi is a Staff Software Engineer at Walmart Global Tech specializing in cloud-native microservices and performance optimization for high-volume financial systems. His work focuses on measurable reliability, distributed observability, and operational guardrails for intelligent infrastructure operating at scale.
+Sibasis Padhi is a Staff Software Engineer at Global Technology Company specializing in cloud-native microservices and performance optimization for high-volume financial systems. His work focuses on measurable reliability, distributed observability, and operational guardrails for intelligent infrastructure operating at scale.
 
 Headshot:
 I will attach a web-ready version in JPG format.
@@ -713,7 +713,7 @@ Focus on thought leadership and industry insights. Vendor-neutral talks perform 
 
 So:
 
-Do NOT mention Walmart internal systems.
+Do NOT mention Enterprise internal systems.
 
 Do NOT mention proprietary architecture.
 
@@ -1311,10 +1311,10 @@ Observability patterns for traceability (signals → decisions → outcomes) usi
 A concrete checklist for implementing closed-loop reliability governance on Kubernetes
 
 Presenter info:
-Sibasis Padhi — Staff Software Engineer — Walmart Global Tech
+Sibasis Padhi — Staff Software Engineer — Global Technology Company
 
 Short bio (optional):
-Sibasis Padhi is a Staff Software Engineer at Walmart Global Tech specializing in cloud-native microservices and performance optimization for high-volume financial systems. His work focuses on measurable reliability, distributed observability, and operational guardrails for intelligent infrastructure operating at scale.
+Sibasis Padhi is a Staff Software Engineer at Global Technology Company specializing in cloud-native microservices and performance optimization for high-volume financial systems. His work focuses on measurable reliability, distributed observability, and operational guardrails for intelligent infrastructure operating at scale.
 
 Professional headshot:
 I will send a web-ready JPG in a separate reply.
