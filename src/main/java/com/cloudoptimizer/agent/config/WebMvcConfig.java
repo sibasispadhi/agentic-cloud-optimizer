@@ -2,6 +2,7 @@ package com.cloudoptimizer.agent.config;
 
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.servlet.config.annotation.CorsRegistry;
+import org.springframework.web.servlet.config.annotation.ResourceHandlerRegistry;
 import org.springframework.web.servlet.config.annotation.ViewControllerRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
@@ -27,5 +28,12 @@ public class WebMvcConfig implements WebMvcConfigurer {
     public void addViewControllers(ViewControllerRegistry registry) {
         // Redirect root to live dashboard
         registry.addViewController("/").setViewName("forward:/live-dashboard.html");
+    }
+
+    @Override
+    public void addResourceHandlers(ResourceHandlerRegistry registry) {
+        // Serve artifacts directory for results page
+        registry.addResourceHandler("/artifacts/**")
+                .addResourceLocations("file:artifacts/");
     }
 }
