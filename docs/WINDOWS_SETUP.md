@@ -11,7 +11,7 @@
 ## ✅ Good News: Everything Works on Windows!
 
 Agent Cloud Optimizer is **100% cross-platform**:
-- ✅ Java 17+ (cross-platform)
+- ✅ Java 21+ (cross-platform)
 - ✅ Spring Boot (cross-platform)
 - ✅ Ollama (Windows supported!)
 - ✅ Maven (cross-platform)
@@ -23,7 +23,7 @@ Agent Cloud Optimizer is **100% cross-platform**:
 
 ### **Step 1: Install Prerequisites**
 
-#### **1.1 Install Java 17+**
+#### **1.1 Install Java 21+**
 ```powershell
 # Option 1: Using winget (Windows 11)
 winget install EclipseAdoptium.Temurin.17.JDK

@@ -25,7 +25,7 @@ This roadmap guides you through **transforming traditional Java microservices in
 
 **Timeline:** 10-12 weeks (2-3 weeks per phase)  
 **Team Size:** 2-3 developers + 1 SRE  
-**Prerequisites:** Java 17+, Spring Boot, basic understanding of JVM tuning
+**Prerequisites:** Java 21+, Spring Boot, basic understanding of JVM tuning
 
 ---
 
@@ -301,7 +301,7 @@ public class GcMetricsCollector {
 
 <script>
 // WebSocket for real-time updates
-const ws = new WebSocket('ws://localhost:8080/ws/metrics');
+const ws = new WebSocket('ws://localhost:8081/ws/metrics');
 ws.onmessage = (event) => {
   const metrics = JSON.parse(event.data);
   document.getElementById('p99-latency').textContent = 

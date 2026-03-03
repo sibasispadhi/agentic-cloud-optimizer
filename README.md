@@ -128,11 +128,11 @@ mvn clean package -DskipTests
 # Windows: scripts\run-web-ui.bat
 ```
 
-Open: http://localhost:8080/live-dashboard.html
+Open: http://localhost:8081/live-dashboard.html
 
 ## View results
 
-- Results page (served by the app): http://localhost:8080/results.html
+- Results page (served by the app): http://localhost:8081/results.html
 - `artifacts/` directory (baseline/after/report + reasoning traces)
 
 Legacy: `demo.html` now just points you to `/results.html`.

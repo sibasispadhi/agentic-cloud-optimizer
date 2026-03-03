@@ -60,8 +60,13 @@ HEAP_OPTIMIZATION_IMPLEMENTATION.md
 # DevNexus 2026 - keep local until after conference
 presentation/devnexus-2026-slides.html
 presentation/devnexus-2026-slides-OFFLINE.html
+presentation/devnexus-2026-slides.pptx
+presentation/devnexus-2026-slides.pdf
 presentation/vendor/
 examples/devnexus/
 docs/DEMO_SCRIPT.md
 CONFERENCE_READINESS_PLAN.md
 PROGRESS_LOG.md
+
+# Local tooling
+.venv-slides/

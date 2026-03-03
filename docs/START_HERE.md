@@ -6,7 +6,7 @@
 
 ## 1) Prereqs
 
-- Java **17+**
+- Java **21+**
 - Maven **3.8+**
 - Ollama (**required** for LLM mode)
 
@@ -61,7 +61,7 @@ scripts\run-agent.bat
 scripts\run-web-ui.bat
 ```
 
-Open: http://localhost:8080/live-dashboard.html
+Open: http://localhost:8081/live-dashboard.html
 
 ## 6) View results
 
@@ -96,4 +96,4 @@ chmod +x scripts/*.sh
 
 ### Java too old
 
-Install Java 17+ (Temurin recommended): https://adoptium.net/
+Install Java 21+ (Temurin recommended): https://adoptium.net/

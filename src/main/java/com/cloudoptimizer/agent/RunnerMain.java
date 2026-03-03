@@ -59,6 +59,7 @@ public class RunnerMain implements CommandLineRunner {
     private final String simulatorName;
     private final String agentStrategy;
     private final String runMode;
+    private final int serverPort;
     private final MetricsLogger metricsLogger;
     private final SimpleAgent simpleAgent;
     private final SpringAiLlmAgent llmAgent;
@@ -72,7 +73,8 @@ public class RunnerMain implements CommandLineRunner {
                      SpringAiLlmAgent llmAgent,
                      @Value("${workload.simulator:demo}") String simulatorName,
                      @Value("${agent.strategy:llm}") String agentStrategy,
-                     @Value("${run.mode:web}") String runMode) {
+                     @Value("${run.mode:web}") String runMode,
+                     @Value("${server.port:8081}") int serverPort) {
         this.context = context;
         this.simulators = Map.of(
                 "demo", demoSimulator,
@@ -81,6 +83,7 @@ public class RunnerMain implements CommandLineRunner {
         this.simulatorName = simulatorName;
         this.agentStrategy = agentStrategy;
         this.runMode = runMode;
+        this.serverPort = serverPort;
         this.metricsLogger = metricsLogger;
         this.simpleAgent = simpleAgent;
         this.llmAgent = llmAgent;
@@ -95,7 +98,7 @@ public class RunnerMain implements CommandLineRunner {
         // Only run in CLI mode
         if (!"cli".equalsIgnoreCase(runMode)) {
             log.info("Running in {} mode - CommandLineRunner disabled", runMode);
-            log.info("Access the live dashboard at: http://localhost:8080/live-dashboard.html");
+            log.info("Access the live dashboard at: http://localhost:{}/live-dashboard.html", serverPort);
             return;
         }
         
