@@ -1,0 +1,107 @@
+╭───────────────────────────────────────────────────────────────────────╮
+│  DEVNEXUS 2026 LIVE DEMO — ONE-PAGE CHEAT SHEET  📝               │
+╰───────────────────────────────────────────────────────────────────────╯
+
+┌───────────────────────────────────────────────────────────────────────┐
+│ 🚀 THE COMMAND (copy-paste ready)                                  │
+└───────────────────────────────────────────────────────────────────────┘
+
+AGENT_STRATEGY=simple CONCURRENCY=16 DURATION=10 \
+  java -Dagent.strategy=simple -Dbaseline.concurrency=16 \
+       -Dload.duration=10 -Drun.mode=cli -jar target/*.jar
+
+Time: ~25 seconds
+Expected: p99 64ms → 53ms (-18%)
+
+┌───────────────────────────────────────────────────────────────────────┐
+│ 🎤 TALK TRACK (what to say while it runs)                          │
+└───────────────────────────────────────────────────────────────────────┘
+
+When you hit Enter:
+┌─────────────────────────────────────────────────────────────────────┐
+│ "This is 16 concurrent threads for 10 seconds.                    │
+│  Notice: we're NOT breaching the SLO this time — p99 ~64ms.      │
+│  Traditional monitoring says 'everything's fine.'                │
+│  But watch what the agent does..."                              │
+└─────────────────────────────────────────────────────────────────────┘
+
+While baseline runs (~12 sec):
+┌─────────────────────────────────────────────────────────────────────┐
+│ "It's collecting metrics... p99, GC, heap, throughput...         │
+│  Multi-dimensional analysis, not just one metric in isolation." │
+└─────────────────────────────────────────────────────────────────────┘
+
+When baseline results show:
+┌─────────────────────────────────────────────────────────────────────┐
+│ "Baseline: p99 is 64ms. Under 100ms target. Looks good!          │
+│  But the agent says: 'We can do better. Reduce to 12 threads.'" │
+└─────────────────────────────────────────────────────────────────────┘
+
+When after results show (~25 sec):
+┌─────────────────────────────────────────────────────────────────────┐
+│ "There! p99: 64ms → 53ms. That's 18% improvement.                │
+│  This is PROACTIVE optimization — making good systems better.    │
+│  Confidence: 95%, Impact: LOW, Rollback available."             │
+└─────────────────────────────────────────────────────────────────────┘
+
+┌───────────────────────────────────────────────────────────────────────┐
+│ 🚨 IF SOMETHING GOES WRONG                                           │
+└───────────────────────────────────────────────────────────────────────┘
+
+• Demo hangs: Ctrl+C → "Let me show pre-generated results instead"
+• Results weird: "Interesting! Here's the consistent pattern..."
+• Terminal unreadable: Read numbers verbally
+• Build failed: Skip live demo, use pre-generated only
+
+┌───────────────────────────────────────────────────────────────────────┐
+│ 📊 EXPECTED NUMBERS (reference)                                     │
+└───────────────────────────────────────────────────────────────────────┘
+
+BEFORE (16 threads):
+  p99:        ~64ms
+  Median:     ~31ms
+  Throughput: ~493 req/s
+  Heap usage: 0.3%
+
+AFTER (12 threads):
+  p99:        ~53ms   (-18%)
+  Median:     ~30ms   (-3%)
+  Throughput: ~394 req/s  (-20%)
+  Heap usage: 0.3%
+
+Key message: Trade-off throughput for latency improvement
+
+┌───────────────────────────────────────────────────────────────────────┐
+│ ✅ PRE-DEMO CHECKLIST                                                │
+└───────────────────────────────────────────────────────────────────────┘
+
+30 minutes before talk:
+
+  [ ] ls -lh target/*.jar          (verify jar exists)
+  [ ] ./scripts/reset-demo.sh       (clean state)
+  [ ] open presentation/*.html      (slides ready)
+  [ ] Test: cat examples/devnexus/baseline.json (pre-gen works)
+
+┌───────────────────────────────────────────────────────────────────────┐
+│ 🎯 KEY MESSAGES                                                       │
+└───────────────────────────────────────────────────────────────────────┘
+
+1. PROACTIVE vs REACTIVE
+   Traditional: wait for breach, then firefight
+   Agentic: continuously optimize healthy systems
+
+2. MULTI-OBJECTIVE
+   Not just latency — also throughput, cost, GC
+   Trade-offs are explicit and explainable
+
+3. CONFIDENCE-DRIVEN
+   95% confidence = safe to proceed
+   <80% confidence = escalate to human
+
+4. EXPLAINABLE AI
+   Full transparency, no black box
+   You can audit every decision
+
+╭───────────────────────────────────────────────────────────────────────╮
+│ YOU'VE GOT THIS! 🚀 The live demo adds credibility + excitement!  │
+╰───────────────────────────────────────────────────────────────────────╯
