@@ -98,13 +98,19 @@ public class MetricsLogger {
      * 
      * @param metric the metric row to log
      * @return CompletableFuture that completes when logging is done
+     * @throws IllegalArgumentException if metric is null
      */
     public CompletableFuture<Void> logMetric(MetricRow metric) {
+        if (metric == null) {
+            return CompletableFuture.failedFuture(
+                    new IllegalArgumentException("Metric cannot be null"));
+        }
+        
         return CompletableFuture.runAsync(() -> {
             try {
                 String jsonLine = objectMapper.writeValueAsString(metric);
                 writeToFile(metric.getResourceType(), jsonLine);
-                log.debug("Logged metric: {} for resource: {}", 
+                log.info("Logged metric: {} for resource: {}", 
                         metric.getMetricName(), metric.getResourceId());
             } catch (Exception e) {
                 log.error("Failed to log metric: {}", metric, e);
@@ -128,8 +134,10 @@ public class MetricsLogger {
 
             try {
                 // Group metrics by resource type for efficient file I/O
+                // Use "unknown" as default for null resourceType
                 metrics.stream()
-                        .collect(java.util.stream.Collectors.groupingBy(MetricRow::getResourceType))
+                        .collect(java.util.stream.Collectors.groupingBy(
+                                m -> m.getResourceType() != null ? m.getResourceType() : "unknown"))
                         .forEach((resourceType, metricList) -> {
                             try {
                                 StringBuilder batchContent = new StringBuilder();
@@ -182,12 +190,13 @@ public class MetricsLogger {
     /**
      * Generates a date-based file name for metric storage.
      * 
-     * @param resourceType the resource type
+     * @param resourceType the resource type (defaults to "unknown" if null)
      * @return formatted file name with date
      */
     private String generateFileName(String resourceType) {
         String date = LocalDate.now().format(DATE_FORMATTER);
-        String sanitizedType = resourceType.toLowerCase().replaceAll("[^a-z0-9-]", "_");
+        String safeType = (resourceType != null) ? resourceType : "unknown";
+        String sanitizedType = safeType.toLowerCase().replaceAll("[^a-z0-9-]", "_");
         return String.format("metrics_%s_%s.jsonl", sanitizedType, date);
     }
 

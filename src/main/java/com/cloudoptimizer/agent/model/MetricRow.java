@@ -7,6 +7,7 @@ import lombok.Builder;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.ToString;
+import lombok.extern.jackson.Jacksonized;
 
 import java.time.Instant;
 import java.util.Map;
@@ -24,6 +25,7 @@ import java.util.Map;
  */
 @Getter
 @Builder
+@Jacksonized  // Enables Jackson to use Lombok builder with defaults
 @ToString
 @EqualsAndHashCode
 @JsonInclude(JsonInclude.Include.NON_NULL)
@@ -35,13 +37,16 @@ public class MetricRow {
     private final Instant timestamp = Instant.now();
 
     @JsonProperty("resource_id")
-    private final String resourceId;
+    @Builder.Default
+    private final String resourceId = "unknown";
 
     @JsonProperty("resource_type")
-    private final String resourceType;
+    @Builder.Default
+    private final String resourceType = "unknown";
 
     @JsonProperty("metric_name")
-    private final String metricName;
+    @Builder.Default
+    private final String metricName = "unnamed";
 
     @JsonProperty("metric_value")
     private final Double metricValue;

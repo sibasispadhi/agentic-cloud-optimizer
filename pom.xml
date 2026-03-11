@@ -57,7 +57,7 @@
             <artifactId>spring-boot-starter-websocket</artifactId>
             <version>${spring-boot.version}</version>
         </dependency>
-        <!-- Spring AI Ollama -->
+        <!-- Spring AI Ollama (local LLM - no cloud dependency!) -->
         <dependency>
             <groupId>org.springframework.ai</groupId>
             <artifactId>spring-ai-ollama-spring-boot-starter</artifactId>

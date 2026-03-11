@@ -1,22 +1,57 @@
 # Agent Cloud Optimizer (ACO)
 
-> **Reference implementation** of agentic AI architecture patterns for Java microservices.  
-> Presented at **DevNexus 2026** — *"Agentic AI for Java Microservices: From Traditional Scaling to Self-Optimization"*
+> **Open-source**, **LLM-powered** JVM performance optimizer for Java microservices.  
+> 100% local, offline AI - **no cloud dependency!**
 
-Autonomous, **LLM-powered** JVM performance optimizer for Java services — demonstrating how self-optimizing systems work in FinTech-scale environments.  
-Runs locally, in Docker, on VMs, or in Kubernetes. No cloud dependency required.
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Java](https://img.shields.io/badge/java-21-orange.svg)](https://openjdk.org/projects/jdk/21/)
+[![Spring Boot](https://img.shields.io/badge/spring--boot-3.2-green.svg)](https://spring.io/projects/spring-boot)
+[![Ollama](https://img.shields.io/badge/ollama-local%20LLM-purple.svg)](https://ollama.ai/)
 
 ---
 
-## 🎯 DevNexus 2026 Resources
+## 🚀 Quick Start
 
-| Resource | Link |
-|----------|------|
-| 📊 Architecture Patterns | [`docs/ARCHITECTURE_PATTERNS.md`](docs/ARCHITECTURE_PATTERNS.md) |
-| 📍 Practical Roadmap | [`docs/PRACTICAL_ROADMAP.md`](docs/PRACTICAL_ROADMAP.md) |
-| 🧹 Reset Demo | `./scripts/reset-demo.sh` |
+### Option 1: Docker (Recommended)
+```bash
+git clone https://github.com/sibasispadhi/agentic-cloud-optimizer
+cd agentic-cloud-optimizer
+docker compose up --build
+```
+→ First run downloads Ollama model (~2GB). Open http://localhost:8081/live-dashboard.html
 
-> 🎬 **Slide deck & demo script** will be published after the DevNexus 2026 presentation!
+### Option 2: SimpleAgent (No LLM, Ultra-Fast)
+```bash
+git clone https://github.com/sibasispadhi/agentic-cloud-optimizer
+cd agentic-cloud-optimizer
+docker compose -f docker-compose.simple.yml up --build
+```
+→ Rule-based optimization, no model download. Open http://localhost:8081/live-dashboard.html
+
+### Option 3: Local Development
+```bash
+# Terminal 1: Start Ollama
+ollama serve
+ollama pull llama3.2:3b
+
+# Terminal 2: Run ACO
+mvn spring-boot:run
+```
+→ Open http://localhost:8081/live-dashboard.html
+
+---
+
+## 🧠 LLM: Ollama (100% Local)
+
+ACO uses **Ollama** for LLM inference - your data never leaves your machine!
+
+| Feature | Value |
+|---------|-------|
+| **LLM** | Ollama (llama3.2:3b default) |
+| **Cost** | Free |
+| **Privacy** | 100% local, offline |
+| **Model Size** | ~2GB |
+| **Hardware** | 8GB RAM recommended |
 
 ---
 

@@ -34,6 +34,7 @@ logging:
 agent:
   target-latency-ms: 100.0
   artifacts-dir: artifacts
+  strategy: ${AGENT_STRATEGY:llm}  # llm (Ollama) or simple (rule-based)
 
 # SLO Breach Detection (Monitoring/Alerting layer)
 slo:
