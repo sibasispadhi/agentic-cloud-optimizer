@@ -6,6 +6,7 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.ToString;
+import lombok.extern.jackson.Jacksonized;
 
 import java.time.Instant;
 
@@ -22,6 +23,7 @@ import java.time.Instant;
 @Getter
 @Builder
 @ToString
+@Jacksonized
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class RunResult {
 

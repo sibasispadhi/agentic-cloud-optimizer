@@ -1,5 +1,6 @@
 package com.cloudoptimizer.agent.service;
 
+import com.cloudoptimizer.agent.artifact.*;
 import com.cloudoptimizer.agent.model.*;
 import com.cloudoptimizer.agent.simulator.WorkloadSimulator;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -15,9 +16,12 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.time.Instant;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 
 /**
@@ -47,6 +51,7 @@ public class OptimizationOrchestrator {
     private final SpringAiLlmAgent llmAgent;
     private final SloBreachDetector sloBreachDetector;
     private final SimpMessagingTemplate messagingTemplate;
+    private final PlanWriter planWriter;
     private final ObjectMapper objectMapper;
     
     @Value("${baseline.concurrency:4}")
@@ -78,13 +83,15 @@ public class OptimizationOrchestrator {
                                    SimpleAgent simpleAgent,
                                    SpringAiLlmAgent llmAgent,
                                    SloBreachDetector sloBreachDetector,
-                                   SimpMessagingTemplate messagingTemplate) {
+                                   SimpMessagingTemplate messagingTemplate,
+                                   PlanWriter planWriter) {
         this.workloadSimulator = workloadSimulator;
         this.metricsLogger = metricsLogger;
         this.simpleAgent = simpleAgent;
         this.llmAgent = llmAgent;
         this.sloBreachDetector = sloBreachDetector;
         this.messagingTemplate = messagingTemplate;
+        this.planWriter = planWriter;
         this.objectMapper = new ObjectMapper()
                 .registerModule(new JavaTimeModule())
                 .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS)
@@ -253,7 +260,12 @@ public class OptimizationOrchestrator {
         Map<String, Object> report = generateReport(baseline, after, decision, agentStrategy,
                 finalSloBreached, finalBreachReason);
         writeJson(artifactsDir.resolve("report.json"), report);
-        
+
+        // Emit OptimizationPlan artifact (single source of truth for this run)
+        OptimizationPlan plan = buildPlan(baseline, after, decision, agentStrategy,
+                finalSloBreached, finalBreachReason);
+        planWriter.write(plan, artifactsDir);
+
         emitEvent(ProgressEvent.phaseUpdate(OptimizationPhase.COMPLETE, "Optimization complete!"));
         emitEvent(ProgressEvent.completeEvent(report));
         
@@ -389,5 +401,110 @@ public class OptimizationOrchestrator {
     private void writeJson(Path path, Object obj) throws IOException {
         objectMapper.writeValue(path.toFile(), obj);
         log.debug("Written: {}", path);
+    }
+
+    // ── OptimizationPlan builder ──────────────────────────────────────────────
+
+    private OptimizationPlan buildPlan(RunResult baseline, RunResult after,
+                                       AgentDecision decision, String strategy,
+                                       boolean sloBreached, String breachReason) {
+        PlanIntent.Trigger trigger = sloBreached
+                ? PlanIntent.Trigger.SLO_BREACH
+                : PlanIntent.Trigger.MANUAL;
+
+        PlanMetadata metadata = PlanMetadata.builder()
+                .planId(UUID.randomUUID().toString())
+                .generatedAt(Instant.now())
+                .agentStrategy(strategy)
+                .build();
+
+        PlanIntent intent = PlanIntent.builder()
+                .trigger(trigger)
+                .description(sloBreached
+                        ? "SLO breach detected — autonomous remediation triggered"
+                        : "Manual optimization run")
+                .targetLatencyMs(sloTargetP99Ms)
+                .workloadDurationSeconds(loadDuration)
+                .baselineConcurrency(baselineConcurrency)
+                .build();
+
+        List<PlanChange> changes = buildChanges(baseline, after, decision);
+
+        PlanEvidence evidence = PlanEvidence.builder()
+                .agentType(strategy)
+                .recommendation(decision.getRecommendation())
+                .reasoning(decision.getReasoning())
+                .confidenceScore(decision.getConfidenceScore())
+                .concurrencyConfidence(decision.getConcurrencyConfidence())
+                .heapConfidence(decision.getHeapConfidence())
+                .impactLevel(decision.getImpactLevel() != null
+                        ? decision.getImpactLevel().name() : null)
+                .sloBreached(sloBreached)
+                .breachReason(breachReason)
+                .build();
+
+        ValidationRecipe validation = ValidationRecipe.builder()
+                .durationSeconds(loadDuration)
+                .threshold(sloTargetP99Ms * sloBreachThreshold)
+                .passed(after.getP99LatencyMs() <= sloTargetP99Ms * sloBreachThreshold)
+                .validatedAt(Instant.now())
+                .build();
+
+        Map<String, Object> restoreParams = new java.util.LinkedHashMap<>();
+        restoreParams.put("jvm.concurrency", baseline.getConcurrency());
+        if (baseline.getHeapMetrics() != null) {
+            restoreParams.put("jvm.heap_size_mb", baseline.getHeapMetrics().getHeapSizeMb());
+        }
+
+        RollbackRecipe rollback = RollbackRecipe.builder()
+                .restoreParams(restoreParams)
+                .triggerCondition(String.format(
+                        "p99 latency exceeds %.0fms after optimization",
+                        sloTargetP99Ms * sloBreachThreshold))
+                .build();
+
+        return OptimizationPlan.builder()
+                .metadata(metadata)
+                .intent(intent)
+                .baselineSnapshot(baseline)
+                .changes(changes)
+                .evidence(evidence)
+                .policyResult(PolicyEvaluationResult.pending())
+                .validationRecipe(validation)
+                .rollbackRecipe(rollback)
+                .optimizedSnapshot(after)
+                .status(ExecutionStatus.VALIDATED)
+                .build();
+    }
+
+    private List<PlanChange> buildChanges(RunResult baseline, RunResult after,
+                                          AgentDecision decision) {
+        List<PlanChange> changes = new ArrayList<>();
+
+        if (baseline.getConcurrency() != after.getConcurrency()) {
+            changes.add(PlanChange.builder()
+                    .resource("jvm.concurrency")
+                    .fromValue(String.valueOf(baseline.getConcurrency()))
+                    .toValue(String.valueOf(after.getConcurrency()))
+                    .rationale(decision.getReasoning())
+                    .confidence(decision.getConcurrencyConfidence() != null
+                            ? decision.getConcurrencyConfidence()
+                            : decision.getConfidenceScore())
+                    .build());
+        }
+
+        if (decision.getRecommendedHeapSizeMb() != null && baseline.getHeapMetrics() != null) {
+            changes.add(PlanChange.builder()
+                    .resource("jvm.heap_size_mb")
+                    .fromValue(String.valueOf(baseline.getHeapMetrics().getHeapSizeMb()))
+                    .toValue(String.valueOf(decision.getRecommendedHeapSizeMb()))
+                    .rationale(decision.getReasoning())
+                    .confidence(decision.getHeapConfidence() != null
+                            ? decision.getHeapConfidence()
+                            : decision.getConfidenceScore())
+                    .build());
+        }
+
+        return changes;
     }
 }
