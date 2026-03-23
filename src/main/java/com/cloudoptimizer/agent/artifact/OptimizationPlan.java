@@ -31,7 +31,9 @@ import java.util.List;
  *   <li>{@link #autonomyDecision} — autonomy gate result (Phase 4)</li>
  *   <li>{@link #budgetConsumption}— actuation budget accounting (Phase 3)</li>
  *   <li>{@link #validationRecipe} — how to confirm the change worked</li>
+ *   <li>{@link #validationResult} — outcome of the validation run (Phase 5)</li>
  *   <li>{@link #rollbackRecipe}   — how to undo if validation fails</li>
+ *   <li>{@link #rollbackResult}   — outcome of the rollback run (Phase 5)</li>
  *   <li>{@link #optimizedSnapshot}— measured state after change (if applied)</li>
  *   <li>{@link #status}           — current lifecycle stage</li>
  * </ul>
@@ -96,6 +98,21 @@ public class OptimizationPlan {
     /** How to undo the changes if validation fails. */
     @JsonProperty("rollback_recipe")
     private final RollbackRecipe rollbackRecipe;
+
+    /**
+     * Execution result of the post-optimization validation step (Phase 5).
+     * {@code null} when the after-test was not run (blocked by gate).
+     */
+    @JsonProperty("validation_result")
+    private final ValidationResult validationResult;
+
+    /**
+     * Execution result of the rollback step (Phase 5).
+     * Populated whenever rollback is attempted or explicitly skipped;
+     * {@code null} when the after-test did not run.
+     */
+    @JsonProperty("rollback_result")
+    private final RollbackResult rollbackResult;
 
     /**
      * Full load-test result captured <em>after</em> changes are applied.

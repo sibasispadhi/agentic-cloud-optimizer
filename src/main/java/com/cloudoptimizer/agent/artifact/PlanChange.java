@@ -50,4 +50,18 @@ public class PlanChange {
      */
     @JsonProperty("confidence")
     private final double confidence;
+
+    /**
+     * Whether this change can be undone if validation fails.
+     *
+     * <p>{@code true} for resource-tuning changes that can be restored to
+     * the baseline value (e.g., concurrency, heap size).
+     * {@code false} for irreversible operations (e.g., data migrations,
+     * schema changes).
+     *
+     * <p>Defaults to {@code true} for all simulator-driven changes.
+     */
+    @JsonProperty("reversible")
+    @Builder.Default
+    private final boolean reversible = true;
 }

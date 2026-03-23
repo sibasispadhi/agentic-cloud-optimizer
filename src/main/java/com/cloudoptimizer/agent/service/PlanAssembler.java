@@ -25,8 +25,9 @@ import java.util.UUID;
  *
  * <p>Two entry points:
  * <ul>
- *   <li>{@link #buildPlan} — full run: baseline + after snapshot + policy result</li>
- *   <li>{@link #buildBlockedPlan} — policy denied: no after snapshot, status = FAILED</li>
+ *   <li>{@link #buildPlan}        — full run: baseline + after + policy + validation + rollback</li>
+ *   <li>{@link #buildBlockedPlan} — policy/budget denied: no after-snapshot, status = FAILED</li>
+ *   <li>{@link #buildAdvisoryPlan}— observe/advisory mode: no after-test, status = ADVISORY</li>
  * </ul>
  */
 @Service
@@ -47,7 +48,8 @@ public class PlanAssembler {
     // ── Public API ────────────────────────────────────────────────────────────
 
     /**
-     * Builds a complete plan for a run that was executed and validated.
+     * Builds a complete plan for a run that was executed, validated, and
+     * potentially rolled back.
      *
      * @param baseline          load-test result before changes
      * @param after             load-test result after changes
@@ -58,14 +60,20 @@ public class PlanAssembler {
      * @param policyResult      result of policy engine evaluation
      * @param budgetConsumption actuation budget snapshot (Phase 3); may be null
      * @param autonomyDecision  autonomy gate result (Phase 4); may be null
+     * @param validationResult  outcome of the validation step (Phase 5); may be null
+     * @param rollbackResult    outcome of the rollback step (Phase 5); may be null
      */
     public OptimizationPlan buildPlan(RunResult baseline, RunResult after,
                                       AgentDecision decision, String strategy,
                                       boolean sloBreached, String breachReason,
                                       PolicyEvaluationResult policyResult,
                                       BudgetConsumption budgetConsumption,
-                                      AutonomyGateResult autonomyDecision) {
-        boolean validated = after.getP99LatencyMs() <= sloTargetP99Ms * sloBreachThreshold;
+                                      AutonomyGateResult autonomyDecision,
+                                      ValidationResult validationResult,
+                                      RollbackResult rollbackResult) {
+        boolean validated = validationResult != null
+                ? validationResult.status() == ValidationResult.ValidationStatus.PASSED
+                : after.getP99LatencyMs() <= sloTargetP99Ms * sloBreachThreshold;
 
         ValidationRecipe validation = ValidationRecipe.builder()
                 .durationSeconds(loadDuration)
@@ -74,14 +82,18 @@ public class PlanAssembler {
                 .validatedAt(Instant.now())
                 .build();
 
+        ExecutionStatus finalStatus = resolveStatus(validated, rollbackResult);
+
         return basePlanBuilder(baseline, decision, strategy, sloBreached, breachReason, policyResult)
                 .autonomyDecision(autonomyDecision)
                 .budgetConsumption(budgetConsumption)
                 .changes(buildChanges(baseline, after, decision))
                 .validationRecipe(validation)
+                .validationResult(validationResult)
+                .rollbackResult(rollbackResult)
                 .rollbackRecipe(buildRollback(baseline, decision))
                 .optimizedSnapshot(after)
-                .status(ExecutionStatus.VALIDATED)
+                .status(finalStatus)
                 .build();
     }
 
@@ -225,8 +237,9 @@ public class PlanAssembler {
         return changes;
     }
 
-    /** Proposed changes from agent decision — used when the after-test never ran. */
-    private List<PlanChange> buildProposedChanges(RunResult baseline, AgentDecision decision) {
+    /** Proposed changes from agent decision — used when the after-test never ran,
+     *  or to determine per-change reversibility for the rollback executor. */
+    public List<PlanChange> buildProposedChanges(RunResult baseline, AgentDecision decision) {
         List<PlanChange> changes = new ArrayList<>();
         int proposedConcurrency = extractConcurrency(decision.getRecommendation(),
                 baseline.getConcurrency());
@@ -270,6 +283,25 @@ public class PlanAssembler {
                         "p99 latency exceeds %.0fms after optimization",
                         sloTargetP99Ms * sloBreachThreshold))
                 .build();
+    }
+
+    /**
+     * Derives the final {@link ExecutionStatus} from validation and rollback outcomes.
+     *
+     * <ul>
+     *   <li>Validation passed → {@link ExecutionStatus#VALIDATED}</li>
+     *   <li>Validation failed + rollback executed → {@link ExecutionStatus#ROLLED_BACK}</li>
+     *   <li>Validation failed + no rollback → {@link ExecutionStatus#FAILED}</li>
+     *   <li>No validation result available → {@link ExecutionStatus#VALIDATED} (legacy)</li>
+     * </ul>
+     */
+    private static ExecutionStatus resolveStatus(boolean validated, RollbackResult rollbackResult) {
+        if (validated) return ExecutionStatus.VALIDATED;
+        if (rollbackResult != null
+                && rollbackResult.status() == RollbackResult.RollbackStatus.EXECUTED) {
+            return ExecutionStatus.ROLLED_BACK;
+        }
+        return ExecutionStatus.FAILED;
     }
 
     private static int extractConcurrency(String recommendation, int defaultValue) {
