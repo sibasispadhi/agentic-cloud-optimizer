@@ -19,14 +19,25 @@ import java.util.UUID;
 
 /**
  * Simple rule-based agent for cloud resource optimization.
- * 
- * Implements deterministic threshold-based logic:
- * - If median latency > target → INCREASE concurrency
- * - If median latency < 0.7 * target → DECREASE concurrency
- * - Else → KEEP SAME concurrency
- * 
- * Writes reasoning trace to artifacts/reasoning_trace_rule.txt
- * 
+ *
+ * <p>Concurrency rules (applied in both {@code decide} and {@code decideWithHeapAnalysis}):</p>
+ * <ul>
+ *   <li>median latency &gt; target  → scale concurrency UP</li>
+ *   <li>median latency &lt; target × lowThresholdFactor → scale concurrency DOWN</li>
+ *   <li>otherwise → keep concurrency UNCHANGED</li>
+ * </ul>
+ *
+ * <p>Heap rules (applied only in {@code decideWithHeapAnalysis}):</p>
+ * <ul>
+ *   <li>Rule 1 – high GC freq AND high heap usage → increase heap (large)</li>
+ *   <li>Rule 2 – high GC pause avg AND medium heap usage → increase heap (small)</li>
+ *   <li>Rule 3 – low GC freq AND low heap usage → decrease heap (right-size)</li>
+ *   <li>Otherwise → heap is optimal, no change</li>
+ * </ul>
+ *
+ * <p>All thresholds and multipliers are externalised to {@code application.yml}
+ * under the {@code agent.rules} prefix.</p>
+ *
  * @author Sibasis Padhi
  * @version 1.0
  * @since December 2025
@@ -35,7 +46,10 @@ import java.util.UUID;
 public class SimpleAgent {
 
     private static final Logger log = LoggerFactory.getLogger(SimpleAgent.class);
-    private static final double LOW_THRESHOLD_FACTOR = 0.7;
+
+    // -------------------------------------------------------------------------
+    // Core config
+    // -------------------------------------------------------------------------
 
     @Value("${agent.target-latency-ms:100.0}")
     private double targetLatencyMs;
@@ -43,92 +57,107 @@ public class SimpleAgent {
     @Value("${agent.artifacts-dir:artifacts}")
     private String artifactsDir;
 
+    // -------------------------------------------------------------------------
+    // Concurrency rule config
+    // -------------------------------------------------------------------------
+
+    /** Fraction of target latency below which concurrency is reduced. */
+    @Value("${agent.rules.low-threshold-factor:0.7}")
+    private double lowThresholdFactor;
+
+    /** Multiplier applied to concurrency when latency exceeds target. */
+    @Value("${agent.rules.concurrency-scale-up-factor:1.5}")
+    private double concurrencyScaleUpFactor;
+
+    /** Multiplier applied to concurrency when latency is well below target. */
+    @Value("${agent.rules.concurrency-scale-down-factor:0.75}")
+    private double concurrencyScaleDownFactor;
+
+    // -------------------------------------------------------------------------
+    // Heap rule config
+    // -------------------------------------------------------------------------
+
+    @Value("${agent.rules.heap.gc-freq-high-per-sec:1.0}")
+    private double heapGcFreqHighPerSec;
+
+    @Value("${agent.rules.heap.usage-high-percent:80.0}")
+    private double heapUsageHighPercent;
+
+    @Value("${agent.rules.heap.gc-pause-high-ms:100.0}")
+    private double heapGcPauseHighMs;
+
+    @Value("${agent.rules.heap.usage-medium-percent:70.0}")
+    private double heapUsageMediumPercent;
+
+    @Value("${agent.rules.heap.gc-freq-low-per-sec:0.5}")
+    private double heapGcFreqLowPerSec;
+
+    @Value("${agent.rules.heap.usage-low-percent:50.0}")
+    private double heapUsageLowPercent;
+
+    @Value("${agent.rules.heap.scale-up-large-factor:1.5}")
+    private double heapScaleUpLargeFactor;
+
+    @Value("${agent.rules.heap.scale-up-small-factor:1.25}")
+    private double heapScaleUpSmallFactor;
+
+    @Value("${agent.rules.heap.scale-down-factor:0.75}")
+    private double heapScaleDownFactor;
+
+    @Value("${agent.rules.heap.min-heap-mb:256}")
+    private int heapMinMb;
+
+    // =========================================================================
+    // Public API
+    // =========================================================================
+
     /**
-     * Makes optimization decision based on recent metrics.
-     * 
-     * @param recentMetrics list of recent metric samples
+     * Makes an optimization decision based on recent latency metrics only.
+     *
+     * @param recentMetrics list of recent metric samples (must not be null or empty)
      * @param currentConcurrency current concurrency setting
      * @return AgentDecision with new concurrency recommendation
      */
     public AgentDecision decide(List<MetricRow> recentMetrics, int currentConcurrency) {
-        log.info("SimpleAgent analyzing {} metrics with current concurrency {}", 
+        log.info("SimpleAgent analyzing {} metrics with current concurrency {}",
                 recentMetrics.size(), currentConcurrency);
 
         if (recentMetrics == null || recentMetrics.isEmpty()) {
-            throw new IllegalArgumentException("Metrics list cannot be empty");
+            throw new IllegalArgumentException("Metrics list cannot be null or empty");
         }
 
-        // Calculate median latency
         double medianLatency = calculateMedianLatency(recentMetrics);
-        
-        // Apply rule-based logic
-        int newConcurrency;
-        String reasoning;
-        double expectedLatency;
-        AgentDecision.ImpactLevel impactLevel;
+        ConcurrencyResult cr = applyConcurrencyRules(medianLatency, currentConcurrency);
 
-        if (medianLatency > targetLatencyMs) {
-            // High latency → increase concurrency
-            newConcurrency = (int) Math.ceil(currentConcurrency * 1.5);
-            expectedLatency = medianLatency * 0.7;
-            reasoning = String.format(
-                    "Median latency (%.2fms) exceeds target (%.2fms). " +
-                    "Increasing concurrency from %d to %d to improve throughput.",
-                    medianLatency, targetLatencyMs, currentConcurrency, newConcurrency);
-            impactLevel = AgentDecision.ImpactLevel.MEDIUM;
-            
-        } else if (medianLatency < targetLatencyMs * LOW_THRESHOLD_FACTOR) {
-            // Low latency → decrease concurrency
-            newConcurrency = Math.max(1, (int) Math.floor(currentConcurrency * 0.75));
-            expectedLatency = medianLatency * 1.1;
-            reasoning = String.format(
-                    "Median latency (%.2fms) is well below target (%.2fms). " +
-                    "Decreasing concurrency from %d to %d to reduce resource usage.",
-                    medianLatency, targetLatencyMs, currentConcurrency, newConcurrency);
-            impactLevel = AgentDecision.ImpactLevel.LOW;
-            
-        } else {
-            // Within acceptable range → keep same
-            newConcurrency = currentConcurrency;
-            expectedLatency = medianLatency;
-            reasoning = String.format(
-                    "Median latency (%.2fms) is within acceptable range [%.2fms - %.2fms]. " +
-                    "Maintaining current concurrency at %d.",
-                    medianLatency, targetLatencyMs * LOW_THRESHOLD_FACTOR, 
-                    targetLatencyMs, currentConcurrency);
-            impactLevel = AgentDecision.ImpactLevel.LOW;
-        }
-
-        // Build decision
         AgentDecision decision = AgentDecision.builder()
                 .decisionId(UUID.randomUUID().toString())
                 .timestamp(Instant.now())
                 .resourceId("concurrency-pool")
                 .resourceType("ExecutorService")
                 .strategy(AgentStrategy.RULE_BASED)
-                .recommendation(String.format("Set concurrency to %d", newConcurrency))
-                .reasoning(reasoning)
+                .recommendation(String.format("Set concurrency to %d", cr.newConcurrency))
+                .reasoning(cr.reasoning)
                 .confidenceScore(0.95)
-                .impactLevel(impactLevel)
-                .actionItems(java.util.List.of(
-                        String.format("Update concurrency from %d to %d", currentConcurrency, newConcurrency),
-                        String.format("Monitor latency to verify expected %.2fms", expectedLatency)))
-                .metricsAnalyzed(java.util.List.of("latencyMs"))
+                .impactLevel(cr.impactLevel)
+                .actionItems(List.of(
+                        String.format("Update concurrency from %d to %d",
+                                currentConcurrency, cr.newConcurrency),
+                        String.format("Monitor latency to verify expected %.2fms",
+                                cr.expectedLatency)))
+                .metricsAnalyzed(List.of("latencyMs"))
                 .build();
 
-        // Write reasoning trace
-        writeReasoningTrace(decision, medianLatency, currentConcurrency, newConcurrency);
-
-        log.info("SimpleAgent decision: {} -> {} (median: {:.2f}ms, target: {:.2f}ms)",
-                currentConcurrency, newConcurrency, medianLatency, targetLatencyMs);
+        writeSimpleReasoningTrace(decision, medianLatency, currentConcurrency, cr.newConcurrency);
+        log.info("SimpleAgent decision: {} -> {}", currentConcurrency, cr.newConcurrency);
 
         return decision;
     }
 
     /**
-     * Makes optimization decision based on baseline test results including heap metrics.
-     * 
-     * @param baselineResult baseline test results with heap metrics
+     * Makes an optimization decision from a full {@link RunResult},
+     * covering both concurrency and JVM heap sizing.
+     *
+     * @param baselineResult baseline test results including optional heap metrics
      * @param currentConcurrency current concurrency setting
      * @return AgentDecision with concurrency and heap recommendations
      */
@@ -140,316 +169,291 @@ public class SimpleAgent {
         }
 
         double medianLatency = baselineResult.getMedianLatencyMs();
-        HeapMetrics heapMetrics = baselineResult.getHeapMetrics();
-        
-        // Analyze concurrency (same as before)
-        int newConcurrency;
-        String concurrencyReasoning;
-        AgentDecision.ImpactLevel impactLevel;
+        ConcurrencyResult cr = applyConcurrencyRules(medianLatency, currentConcurrency);
+        HeapResult hr = applyHeapRules(baselineResult.getHeapMetrics(), cr.impactLevel);
 
-        if (medianLatency > targetLatencyMs) {
-            newConcurrency = (int) Math.ceil(currentConcurrency * 1.5);
-            concurrencyReasoning = String.format(
-                    "Median latency (%.2fms) exceeds target (%.2fms). " +
-                    "Increasing concurrency from %d to %d.",
-                    medianLatency, targetLatencyMs, currentConcurrency, newConcurrency);
-            impactLevel = AgentDecision.ImpactLevel.MEDIUM;
-        } else if (medianLatency < targetLatencyMs * LOW_THRESHOLD_FACTOR) {
-            newConcurrency = Math.max(1, (int) Math.floor(currentConcurrency * 0.75));
-            concurrencyReasoning = String.format(
-                    "Median latency (%.2fms) is well below target (%.2fms). " +
-                    "Decreasing concurrency from %d to %d.",
-                    medianLatency, targetLatencyMs, currentConcurrency, newConcurrency);
-            impactLevel = AgentDecision.ImpactLevel.LOW;
-        } else {
-            newConcurrency = currentConcurrency;
-            concurrencyReasoning = String.format(
-                    "Median latency (%.2fms) is within acceptable range. " +
-                    "Maintaining concurrency at %d.",
-                    medianLatency, currentConcurrency);
-            impactLevel = AgentDecision.ImpactLevel.LOW;
-        }
+        List<String> actionItems = new ArrayList<>();
+        actionItems.add(String.format("Update concurrency from %d to %d",
+                currentConcurrency, cr.newConcurrency));
 
-        // Analyze heap metrics
-        Integer recommendedHeapMb = null;
-        String heapReasoning = "";
-        
-        if (heapMetrics != null) {
-            long currentHeapMb = heapMetrics.getHeapSizeMb();
-            double heapUsage = heapMetrics.getHeapUsagePercent();
-            double gcFrequency = heapMetrics.getGcFrequencyPerSec();
-            double gcPauseAvg = heapMetrics.getGcPauseTimeAvgMs();
-            
-            // Rule 1: High GC frequency + high heap usage = increase heap
-            if (gcFrequency > 1.0 && heapUsage > 80.0) {
-                recommendedHeapMb = (int) Math.ceil(currentHeapMb * 1.5);
-                heapReasoning = String.format(
-                        " High GC frequency (%.2f/sec) and heap usage (%.1f%%) detected. " +
-                        "Increasing heap from %dMB to %dMB to reduce GC pressure.",
-                        gcFrequency, heapUsage, currentHeapMb, recommendedHeapMb);
-                impactLevel = AgentDecision.ImpactLevel.MEDIUM;
-                
-            // Rule 2: High GC pause time = increase heap
-            } else if (gcPauseAvg > 100.0 && heapUsage > 70.0) {
-                recommendedHeapMb = (int) Math.ceil(currentHeapMb * 1.25);
-                heapReasoning = String.format(
-                        " High GC pause time (%.2fms avg) impacting latency. " +
-                        "Increasing heap from %dMB to %dMB to reduce pause frequency.",
-                        gcPauseAvg, currentHeapMb, recommendedHeapMb);
-                impactLevel = AgentDecision.ImpactLevel.MEDIUM;
-                
-            // Rule 3: Low heap usage + low GC = decrease heap (save cost)
-            } else if (gcFrequency < 0.5 && heapUsage < 50.0) {
-                recommendedHeapMb = (int) Math.max(256, Math.floor(currentHeapMb * 0.75));
-                heapReasoning = String.format(
-                        " Low GC frequency (%.2f/sec) and heap usage (%.1f%%) indicate over-provisioning. " +
-                        "Decreasing heap from %dMB to %dMB to optimize cost.",
-                        gcFrequency, heapUsage, currentHeapMb, recommendedHeapMb);
-                
-            } else {
-                // Heap is optimal
-                recommendedHeapMb = (int) currentHeapMb;
-                heapReasoning = String.format(
-                        " Heap metrics are within acceptable range (usage: %.1f%%, GC freq: %.2f/sec). " +
-                        "Maintaining heap at %dMB.",
-                        heapUsage, gcFrequency, currentHeapMb);
-            }
-        }
+        List<String> metricsAnalyzed = new ArrayList<>();
+        metricsAnalyzed.add("latencyMs");
 
-        // Combine reasoning
-        String fullReasoning = concurrencyReasoning + heapReasoning;
-
-        // Build decision
-        AgentDecision.AgentDecisionBuilder decisionBuilder = AgentDecision.builder()
+        AgentDecision.AgentDecisionBuilder builder = AgentDecision.builder()
                 .decisionId(UUID.randomUUID().toString())
                 .timestamp(Instant.now())
                 .resourceId("service-optimization")
                 .resourceType("JavaService")
                 .strategy(AgentStrategy.RULE_BASED)
-                .recommendation(String.format("Set concurrency to %d", newConcurrency))
-                .reasoning(fullReasoning)
+                .recommendation(String.format("Set concurrency to %d", cr.newConcurrency))
+                .reasoning(cr.reasoning + hr.reasoning)
                 .confidenceScore(0.95)
-                .impactLevel(impactLevel);
+                .impactLevel(hr.impactLevel);
 
-        // Build action items and metrics lists
-        java.util.List<String> actionItems = new java.util.ArrayList<>();
-        actionItems.add(String.format("Update concurrency from %d to %d", currentConcurrency, newConcurrency));
-        
-        java.util.List<String> metricsAnalyzed = new java.util.ArrayList<>();
-        metricsAnalyzed.add("latencyMs");
-
-        if (recommendedHeapMb != null) {
-            decisionBuilder.recommendedHeapSizeMb(recommendedHeapMb);
-            actionItems.add(String.format("Update heap size to %dMB", recommendedHeapMb));
+        if (hr.recommendedHeapMb != null) {
+            builder.recommendedHeapSizeMb(hr.recommendedHeapMb);
+            actionItems.add(String.format("Update heap size to %dMB", hr.recommendedHeapMb));
             metricsAnalyzed.add("heapMetrics");
         }
 
-        decisionBuilder.actionItems(actionItems).metricsAnalyzed(metricsAnalyzed);
-        
-        AgentDecision decision = decisionBuilder.build();
+        AgentDecision decision = builder
+                .actionItems(actionItems)
+                .metricsAnalyzed(metricsAnalyzed)
+                .build();
 
-        // Write reasoning trace
-        writeHeapReasoningTrace(decision, baselineResult, currentConcurrency, newConcurrency);
-
-        log.info("SimpleAgent decision: concurrency {} -> {}, heap -> {}MB", 
-                currentConcurrency, newConcurrency, recommendedHeapMb);
+        writeHeapReasoningTrace(decision, baselineResult, currentConcurrency, cr.newConcurrency);
+        log.info("SimpleAgent decision: concurrency {} -> {}, heap -> {}MB",
+                currentConcurrency, cr.newConcurrency, hr.recommendedHeapMb);
 
         return decision;
     }
 
+    // =========================================================================
+    // Config accessors (used by tests and callers that need the live thresholds)
+    // =========================================================================
+
+    public double getTargetLatencyMs()           { return targetLatencyMs; }
+    public String getArtifactsDir()              { return artifactsDir; }
+    public double getLowThresholdFactor()        { return lowThresholdFactor; }
+    public double getConcurrencyScaleUpFactor()  { return concurrencyScaleUpFactor; }
+    public double getConcurrencyScaleDownFactor(){ return concurrencyScaleDownFactor; }
+
+    // =========================================================================
+    // Internal rule application
+    // =========================================================================
+
     /**
-     * Writes reasoning trace including heap analysis to artifacts directory.
+     * Applies the three concurrency rules and returns a result record.
+     * This is the single, authoritative implementation used by both public methods.
      */
-    private void writeHeapReasoningTrace(AgentDecision decision, RunResult baselineResult,
-                                         int currentConcurrency, int newConcurrency) {
-        try {
-            Path artifactsPath = Paths.get(artifactsDir);
-            if (!Files.exists(artifactsPath)) {
-                Files.createDirectories(artifactsPath);
-            }
-
-            Path tracePath = artifactsPath.resolve("reasoning_trace_rule.txt");
-            
-            StringBuilder trace = new StringBuilder();
-            trace.append("=".repeat(60)).append("\n");
-            trace.append("Simple Agent Decision Trace (with Heap Analysis)\n");
-            trace.append("=".repeat(60)).append("\n");
-            trace.append(String.format("Timestamp: %s\n", decision.getTimestamp().toString()));
-            trace.append(String.format("Decision ID: %s\n", decision.getDecisionId()));
-            trace.append("\n");
-            
-            trace.append("--- Baseline Metrics ---\n");
-            trace.append(String.format("Concurrency: %d\n", currentConcurrency));
-            trace.append(String.format("Median Latency: %.2f ms\n", baselineResult.getMedianLatencyMs()));
-            trace.append(String.format("Target Latency: %.2f ms\n", targetLatencyMs));
-            
-            HeapMetrics heapMetrics = baselineResult.getHeapMetrics();
-            if (heapMetrics != null) {
-                trace.append(String.format("Heap Size: %d MB\n", heapMetrics.getHeapSizeMb()));
-                trace.append(String.format("Heap Usage: %.1f%%\n", heapMetrics.getHeapUsagePercent()));
-                trace.append(String.format("GC Frequency: %.2f/sec\n", heapMetrics.getGcFrequencyPerSec()));
-                trace.append(String.format("GC Pause Avg: %.2f ms\n", heapMetrics.getGcPauseTimeAvgMs()));
-            }
-            trace.append("\n");
-            
-            trace.append("--- Decision ---\n");
-            trace.append(String.format("New Concurrency: %d (change: %+d)\n", 
-                    newConcurrency, newConcurrency - currentConcurrency));
-            if (decision.getRecommendedHeapSizeMb() != null) {
-                trace.append(String.format("Recommended Heap: %d MB\n", 
-                        decision.getRecommendedHeapSizeMb()));
-            }
-            trace.append(String.format("Confidence: %.0f%%\n", decision.getConfidenceScore() * 100));
-            trace.append(String.format("Impact Level: %s\n", decision.getImpactLevel()));
-            trace.append("\n");
-            
-            trace.append("--- Reasoning ---\n");
-            trace.append(decision.getReasoning()).append("\n\n");
-            
-            trace.append("--- Action Items ---\n");
-            for (int i = 0; i < decision.getActionItems().size(); i++) {
-                trace.append(String.format("%d. %s\n", i + 1, decision.getActionItems().get(i)));
-            }
-            trace.append("\n");
-            trace.append("=".repeat(60)).append("\n\n");
-
-            Files.writeString(tracePath, trace.toString(), 
-                    StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
-            
-            log.info("Reasoning trace written to {}", tracePath);
-            
-        } catch (IOException e) {
-            log.error("Failed to write reasoning trace", e);
+    private ConcurrencyResult applyConcurrencyRules(double medianLatency, int currentConcurrency) {
+        if (medianLatency > targetLatencyMs) {
+            int next = (int) Math.ceil(currentConcurrency * concurrencyScaleUpFactor);
+            return new ConcurrencyResult(
+                    next,
+                    medianLatency * lowThresholdFactor,
+                    AgentDecision.ImpactLevel.MEDIUM,
+                    String.format(
+                            "Median latency (%.2fms) exceeds target (%.2fms). "
+                            + "Increasing concurrency from %d to %d to improve throughput.",
+                            medianLatency, targetLatencyMs, currentConcurrency, next));
         }
+
+        if (medianLatency < targetLatencyMs * lowThresholdFactor) {
+            int next = Math.max(1, (int) Math.floor(currentConcurrency * concurrencyScaleDownFactor));
+            return new ConcurrencyResult(
+                    next,
+                    medianLatency * 1.1,
+                    AgentDecision.ImpactLevel.LOW,
+                    String.format(
+                            "Median latency (%.2fms) is well below target (%.2fms). "
+                            + "Decreasing concurrency from %d to %d to reduce resource usage.",
+                            medianLatency, targetLatencyMs, currentConcurrency, next));
+        }
+
+        return new ConcurrencyResult(
+                currentConcurrency,
+                medianLatency,
+                AgentDecision.ImpactLevel.LOW,
+                String.format(
+                        "Median latency (%.2fms) is within acceptable range [%.2fms - %.2fms]. "
+                        + "Maintaining current concurrency at %d.",
+                        medianLatency, targetLatencyMs * lowThresholdFactor,
+                        targetLatencyMs, currentConcurrency));
     }
 
     /**
-     * Calculates median latency from metric samples.
-     * 
-     * @param metrics list of metrics containing latency data
-     * @return median latency in milliseconds
+     * Applies the four heap-sizing rules.
+     * Returns an empty result (no change) when heapMetrics is null.
      */
+    private HeapResult applyHeapRules(HeapMetrics h, AgentDecision.ImpactLevel baseImpact) {
+        if (h == null) {
+            return new HeapResult(null, baseImpact, "");
+        }
+
+        long currentMb      = h.getHeapSizeMb();
+        double usagePct     = h.getHeapUsagePercent();
+        double gcFreq       = h.getGcFrequencyPerSec();
+        double gcPauseAvg   = h.getGcPauseTimeAvgMs();
+
+        // Rule 1 — high GC frequency + high heap usage → increase heap (large)
+        if (gcFreq > heapGcFreqHighPerSec && usagePct > heapUsageHighPercent) {
+            int next = (int) Math.ceil(currentMb * heapScaleUpLargeFactor);
+            return new HeapResult(
+                    next,
+                    AgentDecision.ImpactLevel.MEDIUM,
+                    String.format(
+                            " High GC frequency (%.2f/sec) and heap usage (%.1f%%) detected. "
+                            + "Increasing heap from %dMB to %dMB to reduce GC pressure.",
+                            gcFreq, usagePct, currentMb, next));
+        }
+
+        // Rule 2 — high GC pause time + medium heap usage → increase heap (small)
+        if (gcPauseAvg > heapGcPauseHighMs && usagePct > heapUsageMediumPercent) {
+            int next = (int) Math.ceil(currentMb * heapScaleUpSmallFactor);
+            return new HeapResult(
+                    next,
+                    AgentDecision.ImpactLevel.MEDIUM,
+                    String.format(
+                            " High GC pause time (%.2fms avg) impacting latency. "
+                            + "Increasing heap from %dMB to %dMB to reduce pause frequency.",
+                            gcPauseAvg, currentMb, next));
+        }
+
+        // Rule 3 — low GC frequency + low heap usage → right-size heap down
+        if (gcFreq < heapGcFreqLowPerSec && usagePct < heapUsageLowPercent) {
+            int next = (int) Math.max(heapMinMb, Math.floor(currentMb * heapScaleDownFactor));
+            return new HeapResult(
+                    next,
+                    baseImpact,
+                    String.format(
+                            " Low GC frequency (%.2f/sec) and heap usage (%.1f%%) indicate "
+                            + "over-provisioning. Decreasing heap from %dMB to %dMB to optimize cost.",
+                            gcFreq, usagePct, currentMb, next));
+        }
+
+        // Optimal — no change
+        return new HeapResult(
+                (int) currentMb,
+                baseImpact,
+                String.format(
+                        " Heap metrics are within acceptable range "
+                        + "(usage: %.1f%%, GC freq: %.2f/sec). Maintaining heap at %dMB.",
+                        usagePct, gcFreq, currentMb));
+    }
+
+    // =========================================================================
+    // Median latency helper
+    // =========================================================================
+
     private double calculateMedianLatency(List<MetricRow> metrics) {
         List<Double> latencies = new ArrayList<>();
-        
-        for (MetricRow metric : metrics) {
-            if ("latencyMs".equals(metric.getMetricName())) {
-                latencies.add(metric.getMetricValue());
+        for (MetricRow m : metrics) {
+            if ("latencyMs".equals(m.getMetricName())) {
+                latencies.add(m.getMetricValue());
             }
         }
 
         if (latencies.isEmpty()) {
-            log.warn("No latency metrics found, using default value");
+            log.warn("No latency metrics found; falling back to target latency");
             return targetLatencyMs;
         }
 
         Collections.sort(latencies);
         int size = latencies.size();
-        
-        if (size % 2 == 0) {
-            return (latencies.get(size / 2 - 1) + latencies.get(size / 2)) / 2.0;
-        } else {
-            return latencies.get(size / 2);
-        }
+        return (size % 2 == 0)
+                ? (latencies.get(size / 2 - 1) + latencies.get(size / 2)) / 2.0
+                : latencies.get(size / 2);
     }
 
-    /**
-     * Writes reasoning trace to artifacts directory.
-     * 
-     * @param decision the agent decision
-     * @param medianLatency calculated median latency
-     * @param currentConcurrency current concurrency value
-     * @param newConcurrency recommended concurrency value
-     */
-    private void writeReasoningTrace(AgentDecision decision, double medianLatency,
-                                     int currentConcurrency, int newConcurrency) {
+    // =========================================================================
+    // Reasoning trace writers
+    // =========================================================================
+
+    private void writeSimpleReasoningTrace(AgentDecision decision, double medianLatency,
+                                           int oldConcurrency, int newConcurrency) {
         try {
-            Path artifactsPath = Paths.get(artifactsDir);
-            if (!Files.exists(artifactsPath)) {
-                Files.createDirectories(artifactsPath);
-            }
-
-            Path tracePath = artifactsPath.resolve("reasoning_trace_rule.txt");
-            
-            StringBuilder trace = new StringBuilder();
-            trace.append("=".repeat(60)).append("\n");
-            trace.append("Simple Agent Decision Trace\n");
-            trace.append("=".repeat(60)).append("\n");
-            trace.append(String.format("Timestamp: %s\n", 
-                    decision.getTimestamp().toString()));
-            trace.append(String.format("Decision ID: %s\n", decision.getDecisionId()));
-            trace.append("\n");
-            
-            trace.append("--- Input Parameters ---%n");
-            trace.append(String.format("Current Concurrency: %d%n", currentConcurrency));
-            trace.append(String.format("Target Latency: %.2f ms%n", targetLatencyMs));
-            trace.append(String.format("Low Threshold: %.2f ms (%.0f%% of target)%n", 
-                    targetLatencyMs * LOW_THRESHOLD_FACTOR, LOW_THRESHOLD_FACTOR * 100));
-            trace.append("%n");
-            
-            trace.append("--- Analysis ---%n");
-            trace.append(String.format("Median Latency: %.2f ms%n", medianLatency));
-            
-            if (medianLatency > targetLatencyMs) {
-                trace.append(String.format("Condition: Median (%.2f) > Target (%.2f)%n", 
-                        medianLatency, targetLatencyMs));
-                trace.append("Rule Applied: INCREASE concurrency%n");
-            } else if (medianLatency < targetLatencyMs * LOW_THRESHOLD_FACTOR) {
-                trace.append(String.format("Condition: Median (%.2f) < Low Threshold (%.2f)%n", 
-                        medianLatency, targetLatencyMs * LOW_THRESHOLD_FACTOR));
-                trace.append("Rule Applied: DECREASE concurrency%n");
-            } else {
-                trace.append("Condition: Within acceptable range%n");
-                trace.append("Rule Applied: MAINTAIN concurrency%n");
-            }
-            trace.append("%n");
-            
-            trace.append("--- Decision ---%n");
-            trace.append(String.format("New Concurrency: %d%n", newConcurrency));
-            trace.append(String.format("Change: %d → %d (%+d)%n", 
-                    currentConcurrency, newConcurrency, newConcurrency - currentConcurrency));
-            trace.append(String.format("Confidence: %.0f%%%n", 
-                    decision.getConfidenceScore() * 100));
-            trace.append(String.format("Impact Level: %s%n", decision.getImpactLevel()));
-            trace.append("%n");
-            
-            trace.append("--- Reasoning ---%n");
-            trace.append(decision.getReasoning()).append("%n");
-            trace.append("%n");
-            
-            trace.append("--- Action Items ---%n");
+            Path dir = ensureArtifactsDir();
+            StringBuilder sb = new StringBuilder();
+            sb.append("=".repeat(60)).append("\n");
+            sb.append("Simple Agent Decision Trace\n");
+            sb.append("=".repeat(60)).append("\n");
+            sb.append("Timestamp:          ").append(decision.getTimestamp()).append("\n");
+            sb.append("Decision ID:        ").append(decision.getDecisionId()).append("\n\n");
+            sb.append("--- Input ---\n");
+            sb.append(String.format("Current Concurrency: %d%n", oldConcurrency));
+            sb.append(String.format("Target Latency:      %.2f ms%n", targetLatencyMs));
+            sb.append(String.format("Low Threshold:       %.2f ms (%.0f%% of target)%n",
+                    targetLatencyMs * lowThresholdFactor, lowThresholdFactor * 100));
+            sb.append("\n--- Analysis ---\n");
+            sb.append(String.format("Median Latency: %.2f ms%n", medianLatency));
+            sb.append("\n--- Decision ---\n");
+            sb.append(String.format("Change: %d -> %d (%+d)%n",
+                    oldConcurrency, newConcurrency, newConcurrency - oldConcurrency));
+            sb.append(String.format("Confidence: %.0f%%%n", decision.getConfidenceScore() * 100));
+            sb.append(String.format("Impact Level: %s%n", decision.getImpactLevel()));
+            sb.append("\n--- Reasoning ---\n");
+            sb.append(decision.getReasoning()).append("\n\n");
+            sb.append("--- Action Items ---\n");
             for (int i = 0; i < decision.getActionItems().size(); i++) {
-                trace.append(String.format("%d. %s%n", i + 1, 
-                        decision.getActionItems().get(i)));
+                sb.append(String.format("%d. %s%n", i + 1, decision.getActionItems().get(i)));
             }
-            trace.append("%n");
-            trace.append("=".repeat(60)).append("%n%n");
+            sb.append("\n").append("=".repeat(60)).append("\n\n");
 
-            Files.writeString(tracePath, trace.toString(), 
+            Files.writeString(dir.resolve("reasoning_trace_rule.txt"), sb.toString(),
                     StandardOpenOption.CREATE, StandardOpenOption.APPEND);
-            
-            log.info("Reasoning trace written to {}", tracePath);
-            
+            log.info("Reasoning trace written to {}", dir.resolve("reasoning_trace_rule.txt"));
         } catch (IOException e) {
             log.error("Failed to write reasoning trace", e);
         }
     }
 
-    /**
-     * Gets the configured target latency threshold.
-     * 
-     * @return target latency in milliseconds
-     */
-    public double getTargetLatencyMs() {
-        return targetLatencyMs;
+    private void writeHeapReasoningTrace(AgentDecision decision, RunResult baseline,
+                                         int oldConcurrency, int newConcurrency) {
+        try {
+            Path dir = ensureArtifactsDir();
+            StringBuilder sb = new StringBuilder();
+            sb.append("=".repeat(60)).append("\n");
+            sb.append("Simple Agent Decision Trace (with Heap Analysis)\n");
+            sb.append("=".repeat(60)).append("\n");
+            sb.append("Timestamp:   ").append(decision.getTimestamp()).append("\n");
+            sb.append("Decision ID: ").append(decision.getDecisionId()).append("\n\n");
+            sb.append("--- Baseline Metrics ---\n");
+            sb.append(String.format("Concurrency:    %d%n", oldConcurrency));
+            sb.append(String.format("Median Latency: %.2f ms%n", baseline.getMedianLatencyMs()));
+            sb.append(String.format("Target Latency: %.2f ms%n", targetLatencyMs));
+            HeapMetrics hm = baseline.getHeapMetrics();
+            if (hm != null) {
+                sb.append(String.format("Heap Size:      %d MB%n", hm.getHeapSizeMb()));
+                sb.append(String.format("Heap Usage:     %.1f%%%n", hm.getHeapUsagePercent()));
+                sb.append(String.format("GC Frequency:   %.2f/sec%n", hm.getGcFrequencyPerSec()));
+                sb.append(String.format("GC Pause Avg:   %.2f ms%n", hm.getGcPauseTimeAvgMs()));
+            }
+            sb.append("\n--- Decision ---\n");
+            sb.append(String.format("New Concurrency: %d (change: %+d)%n",
+                    newConcurrency, newConcurrency - oldConcurrency));
+            if (decision.getRecommendedHeapSizeMb() != null) {
+                sb.append(String.format("Recommended Heap: %dMB%n",
+                        decision.getRecommendedHeapSizeMb()));
+            }
+            sb.append(String.format("Confidence: %.0f%%%n", decision.getConfidenceScore() * 100));
+            sb.append(String.format("Impact Level: %s%n", decision.getImpactLevel()));
+            sb.append("\n--- Reasoning ---\n");
+            sb.append(decision.getReasoning()).append("\n\n");
+            sb.append("--- Action Items ---\n");
+            for (int i = 0; i < decision.getActionItems().size(); i++) {
+                sb.append(String.format("%d. %s%n", i + 1, decision.getActionItems().get(i)));
+            }
+            sb.append("\n").append("=".repeat(60)).append("\n\n");
+
+            Files.writeString(dir.resolve("reasoning_trace_rule.txt"), sb.toString(),
+                    StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
+            log.info("Reasoning trace written to {}", dir.resolve("reasoning_trace_rule.txt"));
+        } catch (IOException e) {
+            log.error("Failed to write heap reasoning trace", e);
+        }
     }
 
-    /**
-     * Gets the artifacts directory path.
-     * 
-     * @return artifacts directory path
-     */
-    public String getArtifactsDir() {
-        return artifactsDir;
+    private Path ensureArtifactsDir() throws IOException {
+        Path dir = Paths.get(artifactsDir);
+        if (!Files.exists(dir)) {
+            Files.createDirectories(dir);
+        }
+        return dir;
     }
+
+    // =========================================================================
+    // Private result carriers (avoid returning parallel arrays)
+    // =========================================================================
+
+    private record ConcurrencyResult(
+            int newConcurrency,
+            double expectedLatency,
+            AgentDecision.ImpactLevel impactLevel,
+            String reasoning) {}
+
+    private record HeapResult(
+            Integer recommendedHeapMb,
+            AgentDecision.ImpactLevel impactLevel,
+            String reasoning) {}
 }

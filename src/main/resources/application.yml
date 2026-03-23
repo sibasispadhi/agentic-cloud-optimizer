@@ -35,6 +35,26 @@ agent:
   target-latency-ms: 100.0
   artifacts-dir: artifacts
   strategy: ${AGENT_STRATEGY:llm}  # llm (Ollama) or simple (rule-based)
+  rules:
+    # Latency / concurrency thresholds
+    low-threshold-factor: 0.7          # fraction of target below which concurrency is reduced
+    concurrency-scale-up-factor: 1.5   # multiplier when latency is too high
+    concurrency-scale-down-factor: 0.75 # multiplier when latency is too low
+    heap:
+      # High-pressure triggers (Rule 1)
+      gc-freq-high-per-sec: 1.0        # GC frequency above which heap pressure is high
+      usage-high-percent: 80.0         # heap usage % above which pressure is high
+      # Medium-pressure triggers (Rule 2)
+      gc-pause-high-ms: 100.0          # GC pause avg above which latency impact is flagged
+      usage-medium-percent: 70.0       # heap usage % threshold for medium-pressure rule
+      # Over-provisioned triggers (Rule 3)
+      gc-freq-low-per-sec: 0.5         # GC frequency below which heap is over-provisioned
+      usage-low-percent: 50.0          # heap usage % below which heap is over-provisioned
+      # Scale factors
+      scale-up-large-factor: 1.5       # heap multiplier for high-pressure scenario
+      scale-up-small-factor: 1.25      # heap multiplier for medium-pressure scenario
+      scale-down-factor: 0.75          # heap multiplier for right-sizing
+      min-heap-mb: 256                 # absolute minimum recommended heap in MB
 
 # SLO Breach Detection (Monitoring/Alerting layer)
 slo:
