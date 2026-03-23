@@ -107,6 +107,24 @@ agent:
     impact-levels-requiring-approval:
       - CRITICAL
 
+  # ── Actuation Budget (Phase 3) ───────────────────────────────────────────────
+  # Hard limits on how much change ACO can make in a single optimization run.
+  # Enforced after the Policy Gate — a budget breach blocks the after-test
+  # and writes a FAILED OptimizationPlan artifact with the consumption record.
+  budget:
+    # Maximum number of distinct resource changes allowed per run.
+    # Example: 2 = agent may change at most concurrency AND heap in one cycle.
+    max-changes-per-run: 5
+
+    # Maximum sum of absolute percentage changes across all resources per run.
+    # Example: if concurrency changes +25% and heap -30%, total delta = 55%.
+    # A limit of 75% allows this; a limit of 50% would deny it.
+    max-total-delta-pct: 75.0
+
+    # Informational scope label — recorded in the artifact for audit purposes.
+    # Does not affect enforcement. Values: single-service | environment | region.
+    blast-radius-scope: single-service
+
 # SLO Breach Detection (Monitoring/Alerting layer)
 slo:
   target-p99-ms: ${SLO_TARGET_P99_MS:100.0}

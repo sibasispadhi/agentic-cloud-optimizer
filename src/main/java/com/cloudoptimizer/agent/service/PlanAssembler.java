@@ -1,6 +1,7 @@
 package com.cloudoptimizer.agent.service;
 
 import com.cloudoptimizer.agent.artifact.*;
+import com.cloudoptimizer.agent.budget.BudgetConsumption;
 import com.cloudoptimizer.agent.model.AgentDecision;
 import com.cloudoptimizer.agent.model.RunResult;
 import org.springframework.beans.factory.annotation.Value;
@@ -47,18 +48,21 @@ public class PlanAssembler {
     /**
      * Builds a complete plan for a run that was executed and validated.
      *
-     * @param baseline     load-test result before changes
-     * @param after        load-test result after changes
-     * @param decision     agent's recommendation
-     * @param strategy     agent strategy label ("llm" or "simple")
-     * @param sloBreached  whether an SLO breach triggered this run
-     * @param breachReason human-readable breach description, or null
-     * @param policyResult result of policy engine evaluation
+     * @param baseline         load-test result before changes
+     * @param after            load-test result after changes
+     * @param decision         agent's recommendation
+     * @param strategy         agent strategy label ("llm" or "simple")
+     * @param sloBreached      whether an SLO breach triggered this run
+     * @param breachReason     human-readable breach description, or null
+     * @param policyResult     result of policy engine evaluation
+     * @param budgetConsumption actuation budget snapshot (Phase 3); may be null
+     *                         if budget evaluation was bypassed
      */
     public OptimizationPlan buildPlan(RunResult baseline, RunResult after,
                                       AgentDecision decision, String strategy,
                                       boolean sloBreached, String breachReason,
-                                      PolicyEvaluationResult policyResult) {
+                                      PolicyEvaluationResult policyResult,
+                                      BudgetConsumption budgetConsumption) {
         boolean validated = after.getP99LatencyMs() <= sloTargetP99Ms * sloBreachThreshold;
 
         ValidationRecipe validation = ValidationRecipe.builder()
@@ -69,6 +73,7 @@ public class PlanAssembler {
                 .build();
 
         return basePlanBuilder(baseline, decision, strategy, sloBreached, breachReason, policyResult)
+                .budgetConsumption(budgetConsumption)
                 .changes(buildChanges(baseline, after, decision))
                 .validationRecipe(validation)
                 .rollbackRecipe(buildRollback(baseline, decision))
@@ -78,21 +83,26 @@ public class PlanAssembler {
     }
 
     /**
-     * Builds a plan for a run that was blocked by the policy engine.
+     * Builds a plan for a run that was blocked by the policy engine or
+     * the actuation budget gate.
      * No after-snapshot is recorded; status is {@link ExecutionStatus#FAILED}.
      *
-     * @param baseline     load-test result before the blocked change
-     * @param decision     agent's (denied) recommendation
-     * @param strategy     agent strategy label
-     * @param sloBreached  whether an SLO breach triggered this run
-     * @param breachReason human-readable breach description, or null
-     * @param policyResult result of policy engine evaluation (DENIED)
+     * @param baseline          load-test result before the blocked change
+     * @param decision          agent's (denied) recommendation
+     * @param strategy          agent strategy label
+     * @param sloBreached       whether an SLO breach triggered this run
+     * @param breachReason      human-readable breach description, or null
+     * @param policyResult      result of policy engine evaluation (DENIED)
+     * @param budgetConsumption actuation budget snapshot, or null if budget
+     *                          gate was not reached (policy denied first)
      */
     public OptimizationPlan buildBlockedPlan(RunResult baseline,
                                              AgentDecision decision, String strategy,
                                              boolean sloBreached, String breachReason,
-                                             PolicyEvaluationResult policyResult) {
+                                             PolicyEvaluationResult policyResult,
+                                             BudgetConsumption budgetConsumption) {
         return basePlanBuilder(baseline, decision, strategy, sloBreached, breachReason, policyResult)
+                .budgetConsumption(budgetConsumption)
                 .changes(buildProposedChanges(baseline, decision))
                 .validationRecipe(ValidationRecipe.builder()
                         .durationSeconds(loadDuration)

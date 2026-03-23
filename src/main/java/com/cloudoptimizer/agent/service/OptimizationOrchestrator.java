@@ -3,6 +3,10 @@ package com.cloudoptimizer.agent.service;
 import com.cloudoptimizer.agent.artifact.OptimizationPlan;
 import com.cloudoptimizer.agent.artifact.PlanWriter;
 import com.cloudoptimizer.agent.artifact.PolicyEvaluationResult;
+import com.cloudoptimizer.agent.budget.ActuationBudget;
+import com.cloudoptimizer.agent.budget.ActuationBudgetLedger;
+import com.cloudoptimizer.agent.budget.BudgetConsumption;
+import com.cloudoptimizer.agent.budget.ProposedChangeDelta;
 import com.cloudoptimizer.agent.model.*;
 import com.cloudoptimizer.agent.policy.*;
 import com.cloudoptimizer.agent.simulator.WorkloadSimulator;
@@ -57,6 +61,8 @@ public class OptimizationOrchestrator {
     private final PlanAssembler planAssembler;
     private final PolicyEngine policyEngine;
     private final ActuationPolicy actuationPolicy;
+    private final ActuationBudgetLedger actuationBudgetLedger;
+    private final ActuationBudget actuationBudget;
     private final ObjectMapper objectMapper;
     
     @Value("${baseline.concurrency:4}")
@@ -92,7 +98,9 @@ public class OptimizationOrchestrator {
                                    PlanWriter planWriter,
                                    PlanAssembler planAssembler,
                                    PolicyEngine policyEngine,
-                                   ActuationPolicy actuationPolicy) {
+                                   ActuationPolicy actuationPolicy,
+                                   ActuationBudgetLedger actuationBudgetLedger,
+                                   ActuationBudget actuationBudget) {
         this.workloadSimulator = workloadSimulator;
         this.metricsLogger = metricsLogger;
         this.simpleAgent = simpleAgent;
@@ -103,6 +111,8 @@ public class OptimizationOrchestrator {
         this.planAssembler = planAssembler;
         this.policyEngine = policyEngine;
         this.actuationPolicy = actuationPolicy;
+        this.actuationBudgetLedger = actuationBudgetLedger;
+        this.actuationBudget = actuationBudget;
         this.objectMapper = new ObjectMapper()
                 .registerModule(new JavaTimeModule())
                 .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS)
@@ -262,7 +272,7 @@ public class OptimizationOrchestrator {
 
             OptimizationPlan blockedPlan = planAssembler.buildBlockedPlan(
                     baseline, decision, agentStrategy,
-                    finalSloBreached, finalBreachReason, policyResult);
+                    finalSloBreached, finalBreachReason, policyResult, null);
             planWriter.write(blockedPlan, artifactsDir);
 
             Map<String, Object> blockedReport = new HashMap<>();
@@ -284,6 +294,45 @@ public class OptimizationOrchestrator {
             policyDecision.warnings().forEach(w ->
                     emitEvent(ProgressEvent.reasoningUpdate("  ⚠ " + w.message())));
         }
+
+        // Phase 2.6: Actuation Budget Gate
+        List<ProposedChangeDelta> proposedDeltas = buildProposedDeltas(baseline, newConcurrency, decision);
+        BudgetConsumption budgetConsumption = actuationBudgetLedger.evaluate(proposedDeltas, actuationBudget);
+
+        if (!budgetConsumption.withinBudget()) {
+            emitEvent(ProgressEvent.reasoningUpdate(
+                    "💰 Budget gate: EXCEEDED — " + budgetConsumption.denialReason()));
+            emitEvent(ProgressEvent.reasoningUpdate(
+                    String.format("   changes: %d/%d  totalDelta: %.1f%%/%.1f%%",
+                            budgetConsumption.changesAttempted(), budgetConsumption.maxChangesPerRun(),
+                            budgetConsumption.totalDeltaPctConsumed(), budgetConsumption.maxTotalDeltaPct())));
+            log.warn("Budget gate blocked execution: {}", budgetConsumption.denialReason());
+
+            OptimizationPlan budgetBlockedPlan = planAssembler.buildBlockedPlan(
+                    baseline, decision, agentStrategy,
+                    finalSloBreached, finalBreachReason, policyResult, budgetConsumption);
+            planWriter.write(budgetBlockedPlan, artifactsDir);
+
+            Map<String, Object> budgetReport = new HashMap<>();
+            budgetReport.put("status", "blocked");
+            budgetReport.put("policy_outcome", "BUDGET_EXCEEDED");
+            budgetReport.put("budget_denial_reason", budgetConsumption.denialReason());
+            budgetReport.put("changes_attempted", budgetConsumption.changesAttempted());
+            budgetReport.put("max_changes_per_run", budgetConsumption.maxChangesPerRun());
+            budgetReport.put("total_delta_pct", budgetConsumption.totalDeltaPctConsumed());
+            budgetReport.put("max_total_delta_pct", budgetConsumption.maxTotalDeltaPct());
+            budgetReport.put("agent_strategy", agentStrategy);
+            emitEvent(ProgressEvent.phaseUpdate(OptimizationPhase.COMPLETE,
+                    "Run blocked by actuation budget"));
+            emitEvent(ProgressEvent.completeEvent(budgetReport));
+            return budgetReport;
+        }
+
+        emitEvent(ProgressEvent.reasoningUpdate(
+                String.format("💰 Budget gate: OK — %d change(s), %.1f%% total delta (limit: %.1f%%)",
+                        budgetConsumption.changesAttempted(),
+                        budgetConsumption.totalDeltaPctConsumed(),
+                        budgetConsumption.maxTotalDeltaPct())));
 
         // Phase 3: Post-Optimization Load Test
         emitEvent(ProgressEvent.phaseUpdate(OptimizationPhase.OPTIMIZATION_RUNNING, 
@@ -323,7 +372,7 @@ public class OptimizationOrchestrator {
 
         // Emit OptimizationPlan artifact (single source of truth for this run)
         OptimizationPlan plan = planAssembler.buildPlan(baseline, after, decision, agentStrategy,
-                finalSloBreached, finalBreachReason, policyResult);
+                finalSloBreached, finalBreachReason, policyResult, budgetConsumption);
         planWriter.write(plan, artifactsDir);
 
         emitEvent(ProgressEvent.phaseUpdate(OptimizationPhase.COMPLETE, "Optimization complete!"));
@@ -464,6 +513,32 @@ public class OptimizationOrchestrator {
     }
 
     /** Builds the set of resource identifiers the agent proposes to change. */
+    /**
+     * Computes the per-resource absolute delta percentages for the proposed changes.
+     * Used as input to the actuation budget gate.
+     */
+    private List<ProposedChangeDelta> buildProposedDeltas(RunResult baseline,
+                                                          int proposedConcurrency,
+                                                          AgentDecision decision) {
+        List<ProposedChangeDelta> deltas = new java.util.ArrayList<>();
+
+        if (proposedConcurrency != baseline.getConcurrency()) {
+            deltas.add(ProposedChangeDelta.compute(
+                    "jvm.concurrency",
+                    baseline.getConcurrency(),
+                    proposedConcurrency));
+        }
+
+        if (decision.getRecommendedHeapSizeMb() != null && baseline.getHeapMetrics() != null) {
+            deltas.add(ProposedChangeDelta.compute(
+                    "jvm.heap_size_mb",
+                    baseline.getHeapMetrics().getHeapSizeMb(),
+                    decision.getRecommendedHeapSizeMb()));
+        }
+
+        return deltas;
+    }
+
     private Set<String> buildProposedResources(AgentDecision decision) {
         Set<String> resources = new HashSet<>();
         int proposed = extractConcurrency(decision.getRecommendation(), baselineConcurrency);

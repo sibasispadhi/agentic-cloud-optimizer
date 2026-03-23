@@ -2,6 +2,7 @@ package com.cloudoptimizer.agent.artifact;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.cloudoptimizer.agent.budget.BudgetConsumption;
 import com.cloudoptimizer.agent.model.RunResult;
 import lombok.Builder;
 import lombok.Getter;
@@ -25,7 +26,8 @@ import java.util.List;
  *   <li>{@link #baselineSnapshot} — measured state before any change</li>
  *   <li>{@link #changes}          — the changes the agent recommends</li>
  *   <li>{@link #evidence}         — raw output from the agent</li>
- *   <li>{@link #policyResult}     — governance evaluation (Phase 2 stub)</li>
+ *   <li>{@link #policyResult}     — governance evaluation (Phase 2)</li>
+ *   <li>{@link #budgetConsumption}— actuation budget accounting (Phase 3)</li>
  *   <li>{@link #validationRecipe} — how to confirm the change worked</li>
  *   <li>{@link #rollbackRecipe}   — how to undo if validation fails</li>
  *   <li>{@link #optimizedSnapshot}— measured state after change (if applied)</li>
@@ -66,6 +68,16 @@ public class OptimizationPlan {
      */
     @JsonProperty("policy_result")
     private final PolicyEvaluationResult policyResult;
+
+    /**
+     * Actuation budget consumption snapshot (Phase 3).
+     * Records how many changes were attempted, total delta pct consumed,
+     * and whether the run stayed within configured budget limits.
+     * {@code null} when budget evaluation was skipped (e.g. run was blocked
+     * before reaching the budget gate).
+     */
+    @JsonProperty("budget_consumption")
+    private final BudgetConsumption budgetConsumption;
 
     /** How to confirm the applied changes actually worked. */
     @JsonProperty("validation_recipe")
