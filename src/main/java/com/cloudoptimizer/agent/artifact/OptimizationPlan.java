@@ -2,6 +2,7 @@ package com.cloudoptimizer.agent.artifact;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.cloudoptimizer.agent.autonomy.AutonomyGateResult;
 import com.cloudoptimizer.agent.budget.BudgetConsumption;
 import com.cloudoptimizer.agent.model.RunResult;
 import lombok.Builder;
@@ -27,6 +28,7 @@ import java.util.List;
  *   <li>{@link #changes}          — the changes the agent recommends</li>
  *   <li>{@link #evidence}         — raw output from the agent</li>
  *   <li>{@link #policyResult}     — governance evaluation (Phase 2)</li>
+ *   <li>{@link #autonomyDecision} — autonomy gate result (Phase 4)</li>
  *   <li>{@link #budgetConsumption}— actuation budget accounting (Phase 3)</li>
  *   <li>{@link #validationRecipe} — how to confirm the change worked</li>
  *   <li>{@link #rollbackRecipe}   — how to undo if validation fails</li>
@@ -68,6 +70,14 @@ public class OptimizationPlan {
      */
     @JsonProperty("policy_result")
     private final PolicyEvaluationResult policyResult;
+
+    /**
+     * Autonomy gate result (Phase 4).
+     * Records which mode was active and whether actuation was permitted.
+     * {@code null} for plans produced before Phase 4 was wired in.
+     */
+    @JsonProperty("autonomy_decision")
+    private final AutonomyGateResult autonomyDecision;
 
     /**
      * Actuation budget consumption snapshot (Phase 3).

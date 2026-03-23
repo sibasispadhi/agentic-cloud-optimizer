@@ -3,6 +3,9 @@ package com.cloudoptimizer.agent.service;
 import com.cloudoptimizer.agent.artifact.OptimizationPlan;
 import com.cloudoptimizer.agent.artifact.PlanWriter;
 import com.cloudoptimizer.agent.artifact.PolicyEvaluationResult;
+import com.cloudoptimizer.agent.autonomy.AutonomyConfig;
+import com.cloudoptimizer.agent.autonomy.AutonomyGate;
+import com.cloudoptimizer.agent.autonomy.AutonomyGateResult;
 import com.cloudoptimizer.agent.budget.ActuationBudget;
 import com.cloudoptimizer.agent.budget.ActuationBudgetLedger;
 import com.cloudoptimizer.agent.budget.BudgetConsumption;
@@ -63,6 +66,8 @@ public class OptimizationOrchestrator {
     private final ActuationPolicy actuationPolicy;
     private final ActuationBudgetLedger actuationBudgetLedger;
     private final ActuationBudget actuationBudget;
+    private final AutonomyGate autonomyGate;
+    private final AutonomyConfig autonomyConfig;
     private final ObjectMapper objectMapper;
     
     @Value("${baseline.concurrency:4}")
@@ -100,7 +105,9 @@ public class OptimizationOrchestrator {
                                    PolicyEngine policyEngine,
                                    ActuationPolicy actuationPolicy,
                                    ActuationBudgetLedger actuationBudgetLedger,
-                                   ActuationBudget actuationBudget) {
+                                   ActuationBudget actuationBudget,
+                                   AutonomyGate autonomyGate,
+                                   AutonomyConfig autonomyConfig) {
         this.workloadSimulator = workloadSimulator;
         this.metricsLogger = metricsLogger;
         this.simpleAgent = simpleAgent;
@@ -113,6 +120,8 @@ public class OptimizationOrchestrator {
         this.actuationPolicy = actuationPolicy;
         this.actuationBudgetLedger = actuationBudgetLedger;
         this.actuationBudget = actuationBudget;
+        this.autonomyGate = autonomyGate;
+        this.autonomyConfig = autonomyConfig;
         this.objectMapper = new ObjectMapper()
                 .registerModule(new JavaTimeModule())
                 .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS)
@@ -246,6 +255,37 @@ public class OptimizationOrchestrator {
         emitEvent(ProgressEvent.reasoningUpdate(
                 String.format("🎯 Applying recommendation: %d → %d threads", baselineConcurrency, newConcurrency)));
 
+        // Phase 2.4: Autonomy Gate
+        AutonomyGateResult autonomyDecision = autonomyGate.evaluate(decision, autonomyConfig);
+        emitEvent(ProgressEvent.reasoningUpdate(
+                String.format("🤖 Autonomy gate: mode=%s → %s",
+                        autonomyDecision.mode(), autonomyDecision.outcome())));
+
+        if (!autonomyDecision.actuationPermitted()) {
+            emitEvent(ProgressEvent.reasoningUpdate(
+                    "🔵 Autonomy gate blocked actuation: " + autonomyDecision.reason()));
+            log.info("Autonomy gate blocked actuation: mode={} outcome={}",
+                    autonomyDecision.mode(), autonomyDecision.outcome());
+
+            OptimizationPlan advisoryPlan = planAssembler.buildAdvisoryPlan(
+                    baseline, decision, agentStrategy,
+                    finalSloBreached, finalBreachReason, autonomyDecision);
+            planWriter.write(advisoryPlan, artifactsDir);
+
+            Map<String, Object> advisoryReport = new HashMap<>();
+            advisoryReport.put("status", "advisory");
+            advisoryReport.put("autonomy_mode", autonomyDecision.mode().name());
+            advisoryReport.put("autonomy_outcome", autonomyDecision.outcome().name());
+            advisoryReport.put("reason", autonomyDecision.reason());
+            advisoryReport.put("recommendation", decision.getRecommendation());
+            advisoryReport.put("confidence", decision.getConfidenceScore());
+            advisoryReport.put("agent_strategy", agentStrategy);
+            emitEvent(ProgressEvent.phaseUpdate(OptimizationPhase.COMPLETE,
+                    "Run completed in advisory mode: " + autonomyDecision.mode()));
+            emitEvent(ProgressEvent.completeEvent(advisoryReport));
+            return advisoryReport;
+        }
+
         // Phase 2.5: Policy Evaluation
         Set<String> proposedResources = buildProposedResources(decision);
         PolicyContext policyContext = PolicyContext.builder()
@@ -272,7 +312,7 @@ public class OptimizationOrchestrator {
 
             OptimizationPlan blockedPlan = planAssembler.buildBlockedPlan(
                     baseline, decision, agentStrategy,
-                    finalSloBreached, finalBreachReason, policyResult, null);
+                    finalSloBreached, finalBreachReason, policyResult, null, autonomyDecision);
             planWriter.write(blockedPlan, artifactsDir);
 
             Map<String, Object> blockedReport = new HashMap<>();
@@ -310,7 +350,7 @@ public class OptimizationOrchestrator {
 
             OptimizationPlan budgetBlockedPlan = planAssembler.buildBlockedPlan(
                     baseline, decision, agentStrategy,
-                    finalSloBreached, finalBreachReason, policyResult, budgetConsumption);
+                    finalSloBreached, finalBreachReason, policyResult, budgetConsumption, autonomyDecision);
             planWriter.write(budgetBlockedPlan, artifactsDir);
 
             Map<String, Object> budgetReport = new HashMap<>();
@@ -372,7 +412,7 @@ public class OptimizationOrchestrator {
 
         // Emit OptimizationPlan artifact (single source of truth for this run)
         OptimizationPlan plan = planAssembler.buildPlan(baseline, after, decision, agentStrategy,
-                finalSloBreached, finalBreachReason, policyResult, budgetConsumption);
+                finalSloBreached, finalBreachReason, policyResult, budgetConsumption, autonomyDecision);
         planWriter.write(plan, artifactsDir);
 
         emitEvent(ProgressEvent.phaseUpdate(OptimizationPhase.COMPLETE, "Optimization complete!"));

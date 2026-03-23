@@ -1,6 +1,7 @@
 package com.cloudoptimizer.agent.service;
 
 import com.cloudoptimizer.agent.artifact.*;
+import com.cloudoptimizer.agent.autonomy.AutonomyGateResult;
 import com.cloudoptimizer.agent.budget.BudgetConsumption;
 import com.cloudoptimizer.agent.model.AgentDecision;
 import com.cloudoptimizer.agent.model.RunResult;
@@ -48,21 +49,22 @@ public class PlanAssembler {
     /**
      * Builds a complete plan for a run that was executed and validated.
      *
-     * @param baseline         load-test result before changes
-     * @param after            load-test result after changes
-     * @param decision         agent's recommendation
-     * @param strategy         agent strategy label ("llm" or "simple")
-     * @param sloBreached      whether an SLO breach triggered this run
-     * @param breachReason     human-readable breach description, or null
-     * @param policyResult     result of policy engine evaluation
+     * @param baseline          load-test result before changes
+     * @param after             load-test result after changes
+     * @param decision          agent's recommendation
+     * @param strategy          agent strategy label ("llm" or "simple")
+     * @param sloBreached       whether an SLO breach triggered this run
+     * @param breachReason      human-readable breach description, or null
+     * @param policyResult      result of policy engine evaluation
      * @param budgetConsumption actuation budget snapshot (Phase 3); may be null
-     *                         if budget evaluation was bypassed
+     * @param autonomyDecision  autonomy gate result (Phase 4); may be null
      */
     public OptimizationPlan buildPlan(RunResult baseline, RunResult after,
                                       AgentDecision decision, String strategy,
                                       boolean sloBreached, String breachReason,
                                       PolicyEvaluationResult policyResult,
-                                      BudgetConsumption budgetConsumption) {
+                                      BudgetConsumption budgetConsumption,
+                                      AutonomyGateResult autonomyDecision) {
         boolean validated = after.getP99LatencyMs() <= sloTargetP99Ms * sloBreachThreshold;
 
         ValidationRecipe validation = ValidationRecipe.builder()
@@ -73,6 +75,7 @@ public class PlanAssembler {
                 .build();
 
         return basePlanBuilder(baseline, decision, strategy, sloBreached, breachReason, policyResult)
+                .autonomyDecision(autonomyDecision)
                 .budgetConsumption(budgetConsumption)
                 .changes(buildChanges(baseline, after, decision))
                 .validationRecipe(validation)
@@ -95,13 +98,16 @@ public class PlanAssembler {
      * @param policyResult      result of policy engine evaluation (DENIED)
      * @param budgetConsumption actuation budget snapshot, or null if budget
      *                          gate was not reached (policy denied first)
+     * @param autonomyDecision  autonomy gate result (Phase 4); may be null
      */
     public OptimizationPlan buildBlockedPlan(RunResult baseline,
                                              AgentDecision decision, String strategy,
                                              boolean sloBreached, String breachReason,
                                              PolicyEvaluationResult policyResult,
-                                             BudgetConsumption budgetConsumption) {
+                                             BudgetConsumption budgetConsumption,
+                                             AutonomyGateResult autonomyDecision) {
         return basePlanBuilder(baseline, decision, strategy, sloBreached, breachReason, policyResult)
+                .autonomyDecision(autonomyDecision)
                 .budgetConsumption(budgetConsumption)
                 .changes(buildProposedChanges(baseline, decision))
                 .validationRecipe(ValidationRecipe.builder()
@@ -110,6 +116,35 @@ public class PlanAssembler {
                         .build())
                 .rollbackRecipe(buildRollback(baseline, decision))
                 .status(ExecutionStatus.FAILED)
+                .build();
+    }
+
+    /**
+     * Builds an advisory-only plan for runs in {@code OBSERVE_ONLY} or
+     * {@code ADVISORY_ONLY} mode.  No after-snapshot; status is
+     * {@link ExecutionStatus#ADVISORY}.
+     *
+     * @param baseline         baseline load-test result
+     * @param decision         agent's recommendation (proposed only, not applied)
+     * @param strategy         agent strategy label
+     * @param sloBreached      whether an SLO breach triggered this run
+     * @param breachReason     human-readable breach description, or null
+     * @param autonomyDecision autonomy gate result recording why actuation was skipped
+     */
+    public OptimizationPlan buildAdvisoryPlan(RunResult baseline,
+                                              AgentDecision decision, String strategy,
+                                              boolean sloBreached, String breachReason,
+                                              AutonomyGateResult autonomyDecision) {
+        return basePlanBuilder(baseline, decision, strategy, sloBreached, breachReason,
+                        PolicyEvaluationResult.pending())
+                .autonomyDecision(autonomyDecision)
+                .changes(buildProposedChanges(baseline, decision))
+                .validationRecipe(ValidationRecipe.builder()
+                        .durationSeconds(loadDuration)
+                        .threshold(sloTargetP99Ms * sloBreachThreshold)
+                        .build())
+                .rollbackRecipe(buildRollback(baseline, decision))
+                .status(ExecutionStatus.ADVISORY)
                 .build();
     }
 

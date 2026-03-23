@@ -9,6 +9,8 @@ package com.cloudoptimizer.agent.artifact;
  * {@code PENDING → APPLIED → ROLLED_BACK}
  * or
  * {@code PENDING → FAILED} (plan could not be applied)
+ * or
+ * {@code ADVISORY} (plan emitted in advisory/observe-only mode; no changes applied)
  */
 public enum ExecutionStatus {
 
@@ -25,5 +27,11 @@ public enum ExecutionStatus {
     ROLLED_BACK,
 
     /** Plan application failed before changes could be confirmed. */
-    FAILED
+    FAILED,
+
+    /**
+     * Plan produced in advisory mode ({@code OBSERVE_ONLY} or {@code ADVISORY_ONLY}).
+     * Contains baseline snapshot and recommendation but no after-test result.
+     */
+    ADVISORY
 }

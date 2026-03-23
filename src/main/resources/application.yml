@@ -125,6 +125,28 @@ agent:
     # Does not affect enforcement. Values: single-service | environment | region.
     blast-radius-scope: single-service
 
+  # ── Autonomy Mode (Phase 4) ────────────────────────────────────────────────
+  # Controls how much autonomy the agent exercises per run.
+  # Evaluated before the policy gate — OBSERVE_ONLY and ADVISORY_ONLY modes
+  # skip the policy gate entirely and never run the after-test.
+  autonomy:
+    # Active mode. Options:
+    #   OBSERVE_ONLY         — baseline + recommendation only, no actuation
+    #   ADVISORY_ONLY        — plan emitted as artifact, no after-test
+    #   AUTO_LOW_RISK        — auto-actuate only for LOW-impact, high-confidence changes
+    #   AUTO_POLICY_GOVERNED — full automation bounded by policy + budget (default)
+    mode: AUTO_POLICY_GOVERNED
+
+    # [AUTO_LOW_RISK only] Maximum impact level that triggers auto-actuation.
+    # Changes with higher impact are escalated to REQUIRES_APPROVAL.
+    # Valid values: LOW | MEDIUM | HIGH | CRITICAL
+    low-risk-max-impact-level: LOW
+
+    # [AUTO_LOW_RISK only] Minimum agent confidence required for auto-actuation.
+    # Runs with lower confidence are escalated to REQUIRES_APPROVAL.
+    # Range [0.0, 1.0]
+    low-risk-min-confidence: 0.75
+
 # SLO Breach Detection (Monitoring/Alerting layer)
 slo:
   target-p99-ms: ${SLO_TARGET_P99_MS:100.0}
