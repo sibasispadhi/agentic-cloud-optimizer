@@ -35,6 +35,22 @@ agent:
   target-latency-ms: 100.0
   artifacts-dir: artifacts
   strategy: ${AGENT_STRATEGY:llm}  # llm (Ollama) or simple (rule-based)
+  llm:
+    # Concurrency output bounds — LLM recommendations are clamped to this range
+    min-concurrency: 1
+    max-concurrency: 100
+    # Impact level thresholds (% change relative to current concurrency)
+    impact:
+      critical-change-pct: 50.0   # ≥50% change → CRITICAL
+      high-change-pct: 25.0       # ≥25% change → HIGH
+      medium-change-pct: 10.0     # ≥10% change → MEDIUM (else LOW)
+    # Confidence score by change magnitude
+    confidence:
+      low-change: 0.90            # <10% change
+      medium-change: 0.80         # <25% change
+      large-change: 0.70          # <50% change
+      very-large-change: 0.60     # ≥50% change
+    fallback-confidence: 0.50     # returned when LLM is unavailable
   rules:
     # Latency / concurrency thresholds
     low-threshold-factor: 0.7          # fraction of target below which concurrency is reduced

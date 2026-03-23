@@ -85,3 +85,8 @@ docs/PRACTICAL_ROADMAP.md
 
 # Local tooling
 .venv-slides/
+
+# Private documents (not for public repo)
+docs/PLAN.md
+presentation/qcon/
+presentation/techlead/
