@@ -72,6 +72,41 @@ agent:
       scale-down-factor: 0.75          # heap multiplier for right-sizing
       min-heap-mb: 256                 # absolute minimum recommended heap in MB
 
+  # ── Policy Engine (Phase 2) ──────────────────────────────────────────────────
+  # Governance constraints evaluated before every actuation.
+  # A DENIED or REQUIRES_APPROVAL decision blocks the after-test from running.
+  policy:
+    # Max allowed concurrency change relative to baseline (percentage, 0–100).
+    # Example: 50.0 means concurrency may not increase/decrease by more than 50%.
+    max-concurrency-delta-pct: 50.0
+
+    # Max allowed heap size change relative to current heap (percentage, 0–100).
+    max-heap-delta-pct: 50.0
+
+    # Absolute concurrency bounds — proposed value must fall within this range.
+    min-concurrency: 1
+    max-concurrency: 100
+
+    # Absolute heap size bounds (MB) — proposed value must fall within this range.
+    min-heap-mb: 128
+    max-heap-mb: 16384
+
+    # Agent confidence below this threshold escalates to REQUIRES_APPROVAL.
+    # Range [0.0, 1.0].  Set to 0.0 to disable confidence gating.
+    min-confidence-to-act: 0.60
+
+    # Minimum seconds between two applied changes.  0 = cooldown disabled.
+    cooldown-seconds: 0
+
+    # Resources the agent is never permitted to change.  Empty = no restrictions.
+    # Example: ["jvm.heap_size_mb"] to lock heap size.
+    forbidden-resources: []
+
+    # Impact levels that require human approval before execution.
+    # Valid values: LOW, MEDIUM, HIGH, CRITICAL
+    impact-levels-requiring-approval:
+      - CRITICAL
+
 # SLO Breach Detection (Monitoring/Alerting layer)
 slo:
   target-p99-ms: ${SLO_TARGET_P99_MS:100.0}
