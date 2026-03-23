@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Ollama Verification Script for Agent Cloud Optimizer
-# Checks if Ollama is properly configured for DevNexus demo
+# Checks if Ollama is properly configured for local ACO usage
 
 echo "🔍 Verifying Ollama Setup for Agent Cloud Optimizer"
 echo "=================================================="
@@ -71,7 +71,7 @@ echo ""
 
 # Summary
 echo "=================================================="
-echo "✅ All checks passed! Ready for DevNexus demo!"
+echo "✅ All checks passed! Ready for local ACO usage."
 echo ""
 echo "📊 Your Setup:"
 ollama list

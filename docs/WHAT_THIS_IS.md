@@ -1,4 +1,3 @@
-
 **[← Back to START_HERE](START_HERE.md)** | **[← Back to README](../README.md)**
 
 ---
@@ -7,111 +6,260 @@
 
 ## What ACO Is
 
-Agentic Cloud Optimizer (ACO) is a **guided JVM tuning assistant** for Java microservices. It is designed to help SREs, performance engineers, and JVM developers:
+Agent Cloud Optimizer (ACO) is a **governance-first optimization system** for JVM-based services.
+It helps engineers run controlled optimization loops using measurable runtime evidence instead of
+hand-wavy tuning folklore.
 
-- Understand how their services behave under load (threads, heap, GC, CPU).
-- Get **concrete, explainable recommendations** for tuning JVM and concurrency settings.
-- Run repeatable performance experiments with a clear before/after story.
+ACO currently does five core things:
 
-At a high level, ACO:
+1. **Observes runtime behavior**
+   - latency
+   - throughput
+   - heap usage
+   - GC activity
+   - CPU pressure
+   - thread behavior
 
-1. Collects JVM metrics while you run a load test or replay traffic.
-2. Analyzes those metrics using:
-   - A rule-based agent (deterministic heuristics), and
-   - An LLM-powered agent (running locally via Ollama by default).
-3. Generates **human-readable tuning suggestions**:
-   - Thread pool sizes / concurrency
-   - Heap sizing
-   - GC-related flags and thresholds
-4. Logs every recommendation, its reasoning, and the associated metrics, so you can review and compare runs.
+2. **Generates recommendations**
+   - using either a local LLM-backed agent (`SpringAiLlmAgent`) or a deterministic fallback
+     (`SimpleAgent`)
 
-The goal is to give teams a **repeatable, explainable loop** for JVM performance tuning, not to hide decisions behind a black box.
+3. **Packages decisions into a structured artifact**
+   - `OptimizationPlan`
+   - `PlanChange`
+   - `PlanEvidence`
+   - `ValidationRecipe`
+   - `RollbackRecipe`
+
+4. **Applies governance checks before actuation**
+   - policy evaluation
+   - actuation budget checks
+   - autonomy / confidence gating
+
+5. **Models validation and rollback**
+   - how to confirm a change helped
+   - how to recover when it did not
+
+The goal is not "AI makes tuning magical." The goal is to make optimization **bounded,
+explainable, and reviewable**.
 
 ---
 
 ## What ACO Is Not
 
-ACO is intentionally **not** an autonomous system that makes live production changes on its own. Specifically:
+ACO is intentionally **not** a free-roaming production mutation engine.
 
-- ❌ **ACO does not directly modify your production environment.**
-  - It does *not* call Kubernetes APIs to resize deployments.
-  - It does *not* patch JVM settings in running pods.
-  - It does *not* bypass your change management or CI/CD process.
+### ACO does not currently:
 
-- ❌ **ACO is not a replacement for your observability stack.**
-  - It does not try to be Prometheus, OpenTelemetry, or your APM.
-  - It consumes metrics and logs; it does not store or index them long-term.
+- ❌ patch live Kubernetes deployments by itself
+- ❌ edit Helm charts or open GitOps pull requests automatically
+- ❌ ingest OpenSLO specifications
+- ❌ act as a replacement for Prometheus, OpenTelemetry, or an APM platform
+- ❌ solve application-level architectural bugs, bad SQL, or broken business logic
+- ❌ provide multi-region production rollout control
 
-- ❌ **ACO is not a magic "fix my latency" button.**
-  - It will not override bad architecture, missing indexes, or broken business logic.
-  - It focuses on JVM- and concurrency-level tuning where metrics are available.
+If you are looking for "let the model auto-fix prod and hope for the best," this repo is not that.
+On purpose. Because that would be dumb.
 
 ---
 
-## How ACO Fits Into Your Workflow
+## How ACO Works Today
 
-Think of ACO as a **recommendation engine** that plugs into your existing engineering practices. Typical use:
+A typical ACO run follows this path:
 
-1. You run ACO alongside a JVM-based service under load.
-2. ACO generates suggested changes such as:
-   - JVM flags
-   - Thread pool sizes
-   - Container resource hints
-3. You review those suggestions and then apply them manually (or script the application) via:
-   - CI/CD pipelines
-   - Kubernetes manifests / Helm charts
-   - JVM startup flags or config files
-4. You re-run the test and compare metrics using:
-   - ACO's results pages (`/results.html`)
-   - Your observability stack (Prometheus, Grafana, etc.)
+1. **Run a baseline workload**
+2. **Check SLO-related signals**
+3. **Generate a recommendation** from the LLM-backed or deterministic agent
+4. **Assemble an `OptimizationPlan`** as the single source of truth for the run
+5. **Evaluate the plan through policy** using the policy engine
+6. **Check actuation budget** using `ActuationBudgetLedger`
+7. **Evaluate autonomy mode and confidence** using `AutonomyGate`
+8. **Produce validation and rollback steps**
+9. **Persist artifacts and reports** for review
+
+This means ACO is not just a recommendation engine. It is a **governed recommendation pipeline**.
+
+---
+
+## Governance Components That Exist in Code
+
+These are not conceptual buzzwords floating around in a slide deck. They are implemented.
+
+### 1. Optimization artifact
+Located under `src/main/java/com/cloudoptimizer/agent/artifact/`
+
+Key pieces:
+- `OptimizationPlan`
+- `PlanMetadata`
+- `PlanIntent`
+- `PlanChange`
+- `PlanEvidence`
+- `PlanWriter`
+- `ValidationRecipe`
+- `RollbackRecipe`
+- `ValidationResult`
+- `RollbackResult`
+
+Why it matters:
+- every run has a traceable artifact
+- evidence and intent are preserved
+- validation and rollback are first-class parts of the run
+
+### 2. Policy engine
+Located under `src/main/java/com/cloudoptimizer/agent/policy/`
+
+Key pieces:
+- `PolicyEngine`
+- `DefaultPolicyEngine`
+- `ActuationPolicy`
+- `PolicyContext`
+- `PolicyDecision`
+
+Why it matters:
+- recommendation and permission are separated
+- a recommendation can be generated and still be blocked
+- governance is explicit instead of implied
+
+### 3. Actuation budgets
+Located under `src/main/java/com/cloudoptimizer/agent/budget/`
+
+Key pieces:
+- `ActuationBudget`
+- `ActuationBudgetLedger`
+- `BudgetConsumption`
+- `ProposedChangeDelta`
+
+Why it matters:
+- repeated changes are bounded
+- operational churn is treated as a risk surface
+- the system can say "enough changes for now"
+
+### 4. Confidence gates and autonomy modes
+Located under `src/main/java/com/cloudoptimizer/agent/autonomy/`
+
+Key pieces:
+- `AutonomyGate`
+- `AutonomyConfig`
+- `AutonomyMode`
+- `AutonomyGateResult`
+
+Why it matters:
+- advisory-first operation is supported
+- low-risk automatic behavior can be constrained
+- confidence and impact can block actuation
+
+### 5. Validation and rollback modeling
+Implemented across service and artifact layers
+
+Key pieces:
+- `ValidationExecutor`
+- `RollbackExecutor`
+- `ValidationResult`
+- `RollbackResult`
+
+Why it matters:
+- every approved change should have a way to be checked
+- rollback is modeled as part of the workflow, not an afterthought
+
+### 6. Benchmark scenarios
+Located under `src/main/java/com/cloudoptimizer/agent/benchmark/`
+
+Key pieces:
+- `ScenarioRunner`
+- `ScenarioDecisionEngine`
+- `RetryStormScenario`
+- `ThreadSaturationScenario`
+- `CpuThrottlingScenario`
+- `HeapOverprovisionedScenario`
+- `BurstTrafficScenario`
+
+Why it matters:
+- governance behavior can be tested without production data
+- amplification can be measured instead of merely described
+
+---
+
+## How ACO Fits Into an Engineering Workflow
+
+ACO fits best as a **local or controlled-environment optimization assistant**.
+
+Typical workflow:
+
+1. Run ACO against a JVM service or simulator
+2. Inspect the generated plan and reasoning
+3. Review policy warnings / violations
+4. Decide whether to apply the change through your normal delivery process
+5. Re-run and compare before/after outcomes
+6. Keep the artifact as evidence for future review
 
 In other words:
 
-> **ACO proposes. You decide and apply.**
+> **ACO proposes, governs, and documents. You decide how far execution goes.**
+
+That is a lot healthier than pretending autonomy is a personality trait.
 
 ---
 
-## Governance, Safety, and Auditability
+## What ACO Optimizes Right Now
 
-ACO is built with **governance and auditability** in mind:
+Current optimization focus areas:
+- **Concurrency / thread settings**
+- **Heap sizing**
+- **JVM tuning decisions derived from runtime metrics**
 
-- Every tuning recommendation is:
-  - Derived from measurable metrics,
-  - Backed by a textual explanation from the agent(s), and
-  - Logged for later review.
+Current workload modes:
+- `demo` workload simulator
+- `http` workload simulator
 
-- You can:
-  - Store ACO run artifacts (metrics snapshots + reasoning text) as part of your performance test evidence.
-  - Link a specific configuration change in Git/CI to a specific ACO run and explanation.
-  - Use ACO outputs as input to change advisory boards (CABs) or internal risk reviews.
-
-This makes it easier to answer questions like:
-- *"Why did we change these JVM flags?"*
-- *"What data did we look at before scaling this service?"*
-- *"Who or what suggested this tuning, and when?"*
-
-ACO is not meant to remove humans from the loop. It is meant to give them **better, auditable, data-driven suggestions** for JVM and concurrency tuning in Java microservices.
+Current benchmark scenarios:
+- retry storm
+- thread saturation
+- CPU throttling
+- heap overprovisioning
+- burst traffic
 
 ---
 
-## What Does ACO Optimize?
+## Where Outputs Go
 
-- **Concurrency**: Thread pool sizes for the selected workload simulator
-- **JVM Heap Size**: Based on GC metrics (frequency, pause time, heap usage)
+After a run, inspect:
 
-### Workload Simulators
+- `artifacts/`
+  - `baseline.json`
+  - `after.json`
+  - `report.json`
+  - optimization artifacts
+  - reasoning traces
+  - validation / rollback records
 
-- `demo` (default): Built-in demo workload
-- `http`: External HTTP REST endpoint (v0.2.0)
-
-See **[README.md](../README.md)** for examples.
+See **[examples/README.md](../examples/README.md)** for example output structure.
 
 ---
 
-## Where Do Outputs Go?
+## Current Boundaries and Limitations
 
-After a run, look in:
+ACO is useful, but not magic. Current boundaries include:
 
-- `artifacts/` (baseline.json, after.json, report.json, reasoning traces)
+- it is strongest in **controlled and testable environments**
+- it focuses on **JVM and concurrency-level tuning**, not whole-system redesign
+- it does not yet implement **GitOps output generation**
+- it does not yet implement **OpenSLO ingestion**
+- it does not yet provide **broad production rollout orchestration**
 
-See **[examples/README.md](../examples/README.md)** for how to interpret them.
+Those are roadmap items, not present-tense promises.
+
+---
+
+## Bottom Line
+
+ACO is a JVM optimization system with real governance machinery in the loop:
+- structured artifacts
+- policy checks
+- actuation budgets
+- autonomy gates
+- validation
+- rollback modeling
+- benchmark scenarios
+
+That is the real point of the project.
+Not bigger buzzwords. Not fake autonomy. Not decorative AI.

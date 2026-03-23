@@ -1,7 +1,8 @@
 # Agent Cloud Optimizer (ACO)
 
-> **Open-source**, **LLM-powered** JVM performance optimizer for Java microservices.  
-> 100% local, offline AI - **no cloud dependency!**
+> Governance-first, local-first optimization for JVM microservices.
+> ACO combines metric-driven diagnosis, bounded recommendations, audit artifacts,
+> confidence gates, rollback modeling, and benchmark scenarios in one Java codebase.
 
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Java](https://img.shields.io/badge/java-21-orange.svg)](https://openjdk.org/projects/jdk/21/)
@@ -10,185 +11,281 @@
 
 ---
 
-## 🚀 Quick Start
+## What ACO Is
 
-### Option 1: Docker (Recommended)
+ACO is an open-source Java application for experimenting with **governed optimization** of JVM-backed services.
+It watches runtime signals such as latency, heap, GC, CPU, and thread behavior; produces structured
+optimization plans; evaluates those plans against policy and actuation budgets; and validates whether
+changes helped or hurt.
+
+This is **not** "YOLO let the LLM touch prod." That would be extremely innovative in the worst possible way.
+
+ACO currently supports:
+- **Local LLM analysis** through Ollama
+- **Deterministic fallback analysis** through `SimpleAgent`
+- **OptimizationPlan artifacts** for auditability
+- **Policy evaluation** before actuation
+- **Actuation budgets** for bounded change
+- **Confidence gates and autonomy modes**
+- **Validation and rollback modeling**
+- **Deterministic benchmark scenarios** for amplification testing
+
+---
+
+## Why This Project Exists
+
+JVM tuning is still too often a guessing game:
+- thread pools get bumped because latency is bad
+- heap gets inflated "just to be safe"
+- GC settings drift without a recorded reason
+- optimization decisions are made in war rooms and forgotten a week later
+
+ACO turns that into a more disciplined loop:
+
+1. **Observe** runtime behavior
+2. **Reason** about likely bottlenecks
+3. **Assemble** a structured optimization plan
+4. **Govern** that plan with policy, budgets, and autonomy checks
+5. **Validate** the outcome
+6. **Preserve** evidence for review and rollback
+
+The point is not raw automation. The point is **bounded, explainable optimization**.
+
+---
+
+## Quick Start
+
+### Option 1: Docker with local LLM
 ```bash
-git clone https://github.com/sibasispadhi/agentic-cloud-optimizer
+git clone https://github.com/sibasispadhi/agentic-cloud-optimizer.git
 cd agentic-cloud-optimizer
 docker compose up --build
 ```
-→ First run downloads Ollama model (~2GB). Open http://localhost:8081/live-dashboard.html
 
-### Option 2: SimpleAgent (No LLM, Ultra-Fast)
+Open:
+- Live dashboard: http://localhost:8081/live-dashboard.html
+- Results page: http://localhost:8081/results.html
+
+First run downloads the Ollama model, so yeah, give it a minute.
+
+### Option 2: SimpleAgent only (no LLM download)
 ```bash
-git clone https://github.com/sibasispadhi/agentic-cloud-optimizer
+git clone https://github.com/sibasispadhi/agentic-cloud-optimizer.git
 cd agentic-cloud-optimizer
 docker compose -f docker-compose.simple.yml up --build
 ```
-→ Rule-based optimization, no model download. Open http://localhost:8081/live-dashboard.html
 
-### Option 3: Local Development
+Open:
+- Live dashboard: http://localhost:8081/live-dashboard.html
+- Results page: http://localhost:8081/results.html
+
+### Option 3: Local development
 ```bash
-# Terminal 1: Start Ollama
+# Terminal 1
 ollama serve
 ollama pull llama3.2:3b
 
-# Terminal 2: Run ACO
+# Terminal 2
 mvn spring-boot:run
 ```
-→ Open http://localhost:8081/live-dashboard.html
+
+Then open:
+- http://localhost:8081/live-dashboard.html
+- http://localhost:8081/results.html
+
+For a more guided local setup, use **[docs/START_HERE.md](docs/START_HERE.md)**.
 
 ---
 
-## 🧠 LLM: Ollama (100% Local)
+## Core Workflow
 
-ACO uses **Ollama** for LLM inference - your data never leaves your machine!
+When you run an optimization cycle, ACO performs a governance-first pipeline:
 
-| Feature | Value |
-|---------|-------|
-| **LLM** | Ollama (llama3.2:3b default) |
-| **Cost** | Free |
-| **Privacy** | 100% local, offline |
-| **Model Size** | ~2GB |
-| **Hardware** | 8GB RAM recommended |
+1. **Baseline run**
+   - execute workload
+   - collect latency, throughput, heap, CPU, GC, and thread signals
 
----
+2. **SLO check**
+   - determine whether configured thresholds are breached
 
-## Why ACO?
+3. **Agent reasoning**
+   - use `SpringAiLlmAgent` or `SimpleAgent` to generate recommendations
 
-Tuning JVM-based microservices is still mostly guesswork. You tweak thread pools, heap sizes, and GC settings, redeploy, rerun a load test, and hope the new numbers look better. Repeat that a few dozen times across services and environments and you end up with:
+4. **Plan assembly**
+   - package changes, evidence, metadata, validation, and rollback into an `OptimizationPlan`
 
-- Fragile configs that nobody remembers the rationale for
-- Over-provisioned resources to "be safe"
-- Long performance war rooms where people stare at dashboards but don't know what to change
+5. **Policy evaluation**
+   - evaluate proposed changes through `PolicyEngine`
 
-**Agentic Cloud Optimizer (ACO)** removes that guesswork. ACO continuously reads JVM metrics (GC, heap, threads, CPU) while you drive load, then uses an LLM-powered agent (with a safe rule-based fallback) to:
+6. **Budget check**
+   - consume from `ActuationBudgetLedger` before permitting change
 
-- Diagnose performance bottlenecks and anti-patterns in your current settings
-- Propose concrete configuration changes (thread pool sizes, heap limits, GC flags, etc.)
-- Explain *why* each change is being suggested, in plain language
-- Track every recommendation and outcome on a simple web dashboard
+7. **Autonomy gate**
+   - decide advisory vs actuation behavior based on confidence and mode
 
-The goal isn't "AI magic." The goal is to give SREs and performance engineers a **repeatable, explainable loop** for JVM tuning that can be run on a laptop, in a lab, or as part of your CI/CD performance checks.
+8. **Validation + rollback modeling**
+   - define validation criteria and recovery path
 
----
-
-## Hero Example: From Over-Provisioning to Right-Sizing
-
-Here's a real scenario using ACO on a Java Spring Boot service under synthetic load.
-
-**Baseline setup**
-- Service: Spring Boot REST API with built-in workload simulator
-- Workload: Moderate synthetic load (demo mode)
-- JVM config:
-  - Thread pool: 4 worker threads
-  - Heap: `-Xms8g -Xmx8g` (8192 MB)
-  - Default GC (G1)
-
-**Key baseline metrics**
-- Median latency: **28.99 ms**
-- Throughput: **135.30 req/s**
-- Heap usage: **0.6%** (53 MB of 8192 MB)
-- GC frequency: **0 collections/sec** (idle GC)
-- Thread utilization: Low (4 threads handling load easily)
-
-**What ACO diagnosed**
-
-ACO's SimpleAgent analyzed the metrics and identified:
-1. **Severe over-provisioning**: Heap usage at 0.6% indicates ~99% waste
-2. **Unnecessary concurrency**: 4 threads for this load level is overkill
-3. **Cost optimization opportunity**: Can reduce resources without impacting performance
-
-**ACO's recommendation**
-```
-Reasoning: "Median latency (28.99ms) is well below target (100.00ms). 
-Decreasing concurrency from 4 to 3. Low GC frequency (0.00/sec) and 
-heap usage (0.6%) indicate over-provisioning. Decreasing heap from 
-8192MB to 6144MB to optimize cost."
-
-Recommended Changes:
-- Thread pool: 4 → 3 threads (-25%)
-- Heap size: 8192 MB → 6144 MB (-25%)
-- Confidence: 95%
-- Impact: LOW
-```
-
-**After applying ACO's recommendations**
-- Median latency: **28.99 ms** (unchanged - still meeting SLA)
-- Throughput: **102.26 req/s** (sufficient for current load)
-- Heap usage: **0.3%** (26 MB of planned 6144 MB)
-- GC frequency: **0.10 collections/sec** (healthy)
-- **Cost savings: ~25% reduction in heap allocation**
-
-**Key insight**: ACO identified that the service was massively over-provisioned. The original config (8GB heap, 4 threads) was handling a workload that only needed ~50MB of heap and 3 threads. By right-sizing:
-- ✅ Maintained target latency (< 100ms)
-- ✅ Reduced memory allocation by 25% (2GB saved)
-- ✅ Reduced thread overhead by 25%
-- ✅ Freed resources for other services
-- ✅ Provided full reasoning for every decision
-
-This scenario demonstrates ACO's **cost optimization** capabilities. In production environments with hundreds of services, identifying and fixing over-provisioning like this across the fleet can save significant infrastructure costs.
-
-**The ACO workflow**:
-1. Run baseline load test while ACO watches JVM metrics
-2. Review agent's analysis and recommendations (with full reasoning)
-3. Apply changes via your deployment process (Kubernetes, Helm, etc.)
-4. Validate with ACO's side-by-side comparison
-5. Export reasoning traces for documentation
-
-ACO is **opt-in and explainable**: it gives you guided tuning decisions with full reasoning, so you stay in control of how your Java services evolve under real-world load.
+9. **Artifact + report generation**
+   - persist outputs for audit and comparison
 
 ---
 
-## Quick Start (recommended)
+## Implemented Phases
 
-1) Follow **[docs/START_HERE.md](docs/START_HERE.md)**
-2) Install Ollama via **[docs/OLLAMA_SETUP.md](docs/OLLAMA_SETUP.md)**
-3) Verify setup: `./scripts/verify-ollama.sh`
+### Phase 0 — Baseline optimizer stabilization
+- local LLM-backed reasoning with Ollama
+- deterministic fallback agent
+- externalized thresholds in configuration
+- Docker startup flows
 
-## Run (CLI mode)
+### Phase 1 — OptimizationPlan artifact
+Implemented in `src/main/java/com/cloudoptimizer/agent/artifact/`
 
+Key outputs:
+- `OptimizationPlan`
+- `PlanChange`
+- `PlanEvidence`
+- `ValidationRecipe`
+- `RollbackRecipe`
+
+### Phase 2 — Policy engine
+Implemented in `src/main/java/com/cloudoptimizer/agent/policy/`
+
+Key outputs:
+- `PolicyEngine`
+- `DefaultPolicyEngine`
+- `ActuationPolicy`
+- `PolicyDecision`
+
+### Phase 3 — Actuation budgets
+Implemented in `src/main/java/com/cloudoptimizer/agent/budget/`
+
+Key outputs:
+- `ActuationBudget`
+- `ActuationBudgetLedger`
+- `BudgetConsumption`
+
+### Phase 4 — Confidence gates and progressive autonomy
+Implemented in `src/main/java/com/cloudoptimizer/agent/autonomy/`
+
+Key outputs:
+- `AutonomyGate`
+- `AutonomyMode`
+- `AutonomyGateResult`
+
+### Phase 5 — Validation and rollback modeling
+Implemented in the artifact and service layers
+
+Key outputs:
+- `ValidationExecutor`
+- `RollbackExecutor`
+- `ValidationResult`
+- `RollbackResult`
+
+### Phase 6 — Benchmark scenarios
+Implemented in `src/main/java/com/cloudoptimizer/agent/benchmark/`
+
+Included scenarios:
+- retry storm
+- thread saturation
+- CPU throttling
+- heap overprovisioning
+- burst traffic
+
+---
+
+## Benchmark / Amplification Evidence
+
+ACO includes deterministic benchmark scenarios so governance claims can be tested without needing
+production data.
+
+Example outcomes from the benchmark layer:
+- **Retry storm**: 3× amplification factor
+- **Naive latency-reactive agent**: p99 worsened by **58%**
+- **Governed agent**: p99 recovered by **75%**
+
+That is the whole point of the project: useful automation should dampen instability, not cosplay as a chaos monkey.
+
+---
+
+## Generated Outputs
+
+ACO writes artifacts and reports under `artifacts/`.
+
+Typical outputs include:
+- `baseline.json`
+- `after.json`
+- `report.json`
+- optimization-plan artifacts
+- reasoning traces
+- validation and rollback records
+
+You can also inspect example outputs in **[examples/README.md](examples/README.md)**.
+
+---
+
+## Run Commands
+
+### Build
 ```bash
 mvn clean package -DskipTests
+```
+
+### CLI mode
+```bash
 ./scripts/run-agent.sh
 # Windows: scripts\run-agent.bat
 ```
 
-## Run (Live Web Dashboard)
-
+### Live web UI
 ```bash
-mvn clean package -DskipTests
 ./scripts/run-web-ui.sh
 # Windows: scripts\run-web-ui.bat
 ```
 
-Open: http://localhost:8081/live-dashboard.html
+### Verify Ollama
+```bash
+./scripts/verify-ollama.sh
+```
 
-## View results
+---
 
-- Results page (served by the app): http://localhost:8081/results.html
-- `artifacts/` directory (baseline/after/report + reasoning traces)
+## Tech Stack
 
-Legacy: `demo.html` now just points you to `/results.html`.
+- **Java 21**
+- **Spring Boot 3.2**
+- **Spring AI**
+- **Ollama** for local LLM inference
+- **Jackson** for artifact serialization
+- **JUnit** for test coverage
+- **Docker / Docker Compose** for local execution
 
-## Features
+---
 
-- ✅ **SLO Breach Detection**: Monitors p99 latency against configurable SLO thresholds — triggers agent automatically
-- ✅ **p95/p99 Percentile Tracking**: Tail latency metrics critical for FinTech transaction SLAs
-- ✅ **Agentic Closed-Loop**: SLO breach → LLM analyzes → bounded fix → validates improvement
-- ✅ **Concurrency Optimization**: Automatically tunes thread pool sizes
-- ✅ **Heap Optimization**: Analyzes GC metrics and recommends optimal JVM heap size
-- ✅ **LLM-Powered Analysis**: Uses local Ollama for intelligent reasoning (no cloud required)
-- ✅ **Rule-Based Fallback**: SimpleAgent provides fast, deterministic decisions
-- ✅ **Explainable AI**: Full reasoning traces for every decision
-- ✅ **Real-time Dashboard**: WebSocket-powered live monitoring with SLO status
+## Public Docs
 
-## Optional docs
+- **[docs/START_HERE.md](docs/START_HERE.md)** — setup and first run
+- **[docs/INDEX.md](docs/INDEX.md)** — current documentation map
+- **[docs/WHAT_THIS_IS.md](docs/WHAT_THIS_IS.md)** — scope and boundaries
+- **[docs/OLLAMA_SETUP.md](docs/OLLAMA_SETUP.md)** — Ollama install help
+- **[docs/WINDOWS_SETUP.md](docs/WINDOWS_SETUP.md)** — Windows notes
+- **[docs/ARCHITECTURE_PATTERNS.md](docs/ARCHITECTURE_PATTERNS.md)** — design patterns
+- **[docs/STARTUP_READY_PLAN.md](docs/STARTUP_READY_PLAN.md)** — rollout/readiness plan
 
-- What this is / isn't: **[docs/WHAT_THIS_IS.md](docs/WHAT_THIS_IS.md)**
-- Windows setup: **[docs/WINDOWS_SETUP.md](docs/WINDOWS_SETUP.md)**
-- Example outputs: **[examples/README.md](examples/README.md)**
+---
+
+## What Is Not Implemented Yet
+
+These are roadmap items, not shipped capabilities:
+- GitOps PR generation
+- OpenSLO ingestion
+- external telemetry adapters beyond the current local flow
+- broader multi-service / multi-region rollout controls
+
+If it is not in code and tested, it does not get to sit in the README pretending it exists.
+
+---
 
 ## License
 
