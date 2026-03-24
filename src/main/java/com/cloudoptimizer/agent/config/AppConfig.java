@@ -6,6 +6,7 @@ import com.cloudoptimizer.agent.simulator.WorkloadSimulator;
 import org.springframework.ai.chat.ChatClient;
 import org.springframework.ai.ollama.OllamaChatClient;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.scheduling.annotation.EnableAsync;
@@ -17,11 +18,13 @@ import java.util.concurrent.Executor;
 /**
  * Main application configuration for Agent Cloud Optimizer.
  * 
- * Configures core beans including AI chat clients, thread pools,
+ * Configures core beans including AI chat clients (Ollama), thread pools,
  * and async execution capabilities for enterprise-grade performance.
  * 
+ * Uses Ollama for 100% local, offline LLM - no cloud dependency!
+ * 
  * @author Sibasis Padhi
- * @version 1.0
+ * @version 1.1
  * @since 2025
  */
 @Configuration
@@ -44,17 +47,15 @@ public class AppConfig {
     /**
      * Configures the AI chat client for cloud optimization recommendations.
      * 
-     * Uses @ConditionalOnProperty to only create this bean when LLM strategy is active.
-     * This prevents startup failures when Ollama is not available.
+     * Uses Ollama for 100% local, offline LLM inference.
+     * Only created when agent.strategy=llm to prevent startup failures
+     * when Ollama is not available.
      * 
      * @param ollamaChatClient the Ollama chat client instance
      * @return configured ChatClient instance
      */
     @Bean
-    @org.springframework.boot.autoconfigure.condition.ConditionalOnProperty(
-        name = "agent.strategy", 
-        havingValue = "llm"
-    )
+    @ConditionalOnProperty(name = "agent.strategy", havingValue = "llm")
     public ChatClient chatClient(OllamaChatClient ollamaChatClient) {
         return ollamaChatClient;
     }

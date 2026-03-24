@@ -1,5 +1,5 @@
 #!/bin/bash
-# Reset demo state for a clean DevNexus presentation run
+# Reset local demo state for a clean ACO run
 set -e
 
 echo "=================================="
@@ -40,7 +40,7 @@ fi
 
 echo ""
 echo "=================================="
-echo "  ✅ Demo state reset!"
+echo "  ✅ Local demo state reset!"
 echo "=================================="
 echo ""
 echo "Next steps:"
@@ -48,7 +48,7 @@ echo "  1. Start the server:  ./scripts/run-web-ui.sh &"
 echo "     (wait ~10s for Spring Boot to start)"
 echo "  2. Open dashboard:    open http://localhost:8081/live-dashboard.html"
 echo "     Verify: WebSocket dot shows green 'Connected'"
-echo "  3. Open slides:       open presentation/devnexus-2026-slides-OFFLINE.html"
-echo "  4. Run demo:          follow docs/DEMO_SCRIPT.md"
-echo "  5. Fallback artifacts: examples/devnexus/"
+echo "  3. Open results:      open http://localhost:8081/results.html"
+echo "  4. Review artifacts:  ls artifacts/"
+echo "  5. Re-run workload as needed"
 echo ""

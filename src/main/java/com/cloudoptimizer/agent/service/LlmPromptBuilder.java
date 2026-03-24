@@ -30,38 +30,38 @@ public class LlmPromptBuilder {
     public String buildPrompt(List<MetricRow> metrics, int currentConcurrency, double targetLatencyMs) {
         StringBuilder prompt = new StringBuilder();
         
-        prompt.append("You are an expert cloud infrastructure optimization assistant.%n");
-        prompt.append("%n");
-        prompt.append("TASK: Analyze the following performance metrics and recommend an optimal concurrency setting.%n");
-        prompt.append("%n");
-        
-        prompt.append("CURRENT CONFIGURATION:%n");
+        prompt.append("You are an expert cloud infrastructure optimization assistant.\n");
+        prompt.append("\n");
+        prompt.append("TASK: Analyze the following performance metrics and recommend an optimal concurrency setting.\n");
+        prompt.append("\n");
+
+        prompt.append("CURRENT CONFIGURATION:\n");
         prompt.append(String.format("- Current Concurrency: %d threads%n", currentConcurrency));
         prompt.append(String.format("- Target Latency: %.2f ms%n", targetLatencyMs));
-        prompt.append("%n");
-        
-        prompt.append("RECENT METRICS:%n");
+        prompt.append("\n");
+
+        prompt.append("RECENT METRICS:\n");
         prompt.append(formatMetrics(metrics));
-        prompt.append("%n");
-        
-        prompt.append("ANALYSIS GUIDELINES:%n");
-        prompt.append("1. If median latency > target: Consider INCREASING concurrency%n");
-        prompt.append("2. If median latency < 70%% of target: Consider DECREASING concurrency%n");
-        prompt.append("3. If within acceptable range: MAINTAIN current setting%n");
-        prompt.append("4. Balance throughput vs resource efficiency%n");
-        prompt.append("5. Avoid extreme changes (max ±50%% adjustment)%n");
-        prompt.append("%n");
-        
-        prompt.append("REQUIRED OUTPUT FORMAT (JSON only, no markdown):%n");
-        prompt.append("{%n");
-        prompt.append("  \"newConcurrency\": <integer between 1-100>,%n");
-        prompt.append("  \"expectedLatencyMs\": <estimated latency after change>,%n");
-        prompt.append("  \"explanation\": \"<2-3 sentence reasoning for the decision>\"%n");
-        prompt.append("}%n");
-        prompt.append("%n");
-        prompt.append("Respond with ONLY the JSON object, no additional text.%n");
-        
-        return String.format(prompt.toString());
+        prompt.append("\n");
+
+        prompt.append("ANALYSIS GUIDELINES:\n");
+        prompt.append("1. If median latency > target: Consider INCREASING concurrency\n");
+        prompt.append("2. If median latency < 70% of target: Consider DECREASING concurrency\n");
+        prompt.append("3. If within acceptable range: MAINTAIN current setting\n");
+        prompt.append("4. Balance throughput vs resource efficiency\n");
+        prompt.append("5. Avoid extreme changes (max ±50% adjustment)\n");
+        prompt.append("\n");
+
+        prompt.append("REQUIRED OUTPUT FORMAT (JSON only, no markdown):\n");
+        prompt.append("{\n");
+        prompt.append("  \"newConcurrency\": <integer between 1-100>,\n");
+        prompt.append("  \"expectedLatencyMs\": <estimated latency after change>,\n");
+        prompt.append("  \"explanation\": \"<2-3 sentence reasoning for the decision>\"\n");
+        prompt.append("}\n");
+        prompt.append("\n");
+        prompt.append("Respond with ONLY the JSON object, no additional text.\n");
+
+        return prompt.toString();
     }
 
     /**
@@ -159,7 +159,7 @@ public class LlmPromptBuilder {
      */
     private String formatMetrics(List<MetricRow> metrics) {
         if (metrics.isEmpty()) {
-            return "No metrics available%n";
+            return "No metrics available\n";
         }
         
         // Extract latency values
@@ -169,7 +169,7 @@ public class LlmPromptBuilder {
                 .collect(Collectors.toList());
         
         if (latencies.isEmpty()) {
-            return "No latency metrics found%n";
+            return "No latency metrics found\n";
         }
         
         // Calculate statistics

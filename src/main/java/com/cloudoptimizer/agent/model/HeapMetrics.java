@@ -4,6 +4,7 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.ToString;
+import lombok.extern.jackson.Jacksonized;
 
 /**
  * Represents JVM heap and garbage collection metrics.
@@ -15,6 +16,7 @@ import lombok.ToString;
 @Getter
 @Builder
 @ToString
+@Jacksonized
 public class HeapMetrics {
     
     @JsonProperty("heap_size_mb")

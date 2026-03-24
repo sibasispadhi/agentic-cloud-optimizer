@@ -1,7 +1,7 @@
 # Agentic AI Architecture Patterns for Java Microservices
 
 **Author:** Sibasis Padhi  
-**Context:** DevNexus 2026 - Agentic AI for Self-Optimizing Systems  
+**Context:** Architecture patterns distilled from building ACO and related JVM optimization workflows  
 **Last Updated:** February 18, 2026  
 
 ---
@@ -922,4 +922,4 @@ public class MultiAgentOrchestrator {
 
 **Questions? Feedback?**  
 Reach out: [Your contact info]  
-Presentation: DevNexus 2026 - "Agentic AI for Java Microservices"
+Presentation / talk context: reusable for architecture discussions on agentic JVM optimization

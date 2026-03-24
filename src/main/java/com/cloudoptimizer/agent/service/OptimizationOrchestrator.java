@@ -1,6 +1,20 @@
 package com.cloudoptimizer.agent.service;
 
+import com.cloudoptimizer.agent.artifact.OptimizationPlan;
+import com.cloudoptimizer.agent.artifact.PlanChange;
+import com.cloudoptimizer.agent.artifact.PlanWriter;
+import com.cloudoptimizer.agent.artifact.PolicyEvaluationResult;
+import com.cloudoptimizer.agent.artifact.RollbackResult;
+import com.cloudoptimizer.agent.artifact.ValidationResult;
+import com.cloudoptimizer.agent.autonomy.AutonomyConfig;
+import com.cloudoptimizer.agent.autonomy.AutonomyGate;
+import com.cloudoptimizer.agent.autonomy.AutonomyGateResult;
+import com.cloudoptimizer.agent.budget.ActuationBudget;
+import com.cloudoptimizer.agent.budget.ActuationBudgetLedger;
+import com.cloudoptimizer.agent.budget.BudgetConsumption;
+import com.cloudoptimizer.agent.budget.ProposedChangeDelta;
 import com.cloudoptimizer.agent.model.*;
+import com.cloudoptimizer.agent.policy.*;
 import com.cloudoptimizer.agent.simulator.WorkloadSimulator;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
@@ -16,8 +30,10 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 
 /**
@@ -31,22 +47,24 @@ import java.util.concurrent.CompletableFuture;
 public class OptimizationOrchestrator {
 
     private static final Logger log = LoggerFactory.getLogger(OptimizationOrchestrator.class);
-    
-    // Configuration keys
-    private static final String CONCURRENCY = "concurrency";
-    private static final String MEDIAN_LATENCY_MS = "median_latency_ms";
-    private static final String AVG_LATENCY_MS = "avg_latency_ms";
-    private static final String P95_LATENCY_MS = "p95_latency_ms";
-    private static final String REQUESTS_PER_SECOND = "requests_per_second";
-    private static final String TOTAL_REQUESTS = "total_requests";
-    private static final String COST_ESTIMATE_USD = "cost_estimate_usd";
-    
+
     private final WorkloadSimulator workloadSimulator;
     private final MetricsLogger metricsLogger;
     private final SimpleAgent simpleAgent;
     private final SpringAiLlmAgent llmAgent;
     private final SloBreachDetector sloBreachDetector;
     private final SimpMessagingTemplate messagingTemplate;
+    private final PlanWriter planWriter;
+    private final PlanAssembler planAssembler;
+    private final PolicyEngine policyEngine;
+    private final ActuationPolicy actuationPolicy;
+    private final ActuationBudgetLedger actuationBudgetLedger;
+    private final ActuationBudget actuationBudget;
+    private final AutonomyGate autonomyGate;
+    private final AutonomyConfig autonomyConfig;
+    private final ValidationExecutor validationExecutor;
+    private final RollbackExecutor rollbackExecutor;
+    private final ReportGenerator reportGenerator;
     private final ObjectMapper objectMapper;
     
     @Value("${baseline.concurrency:4}")
@@ -78,13 +96,35 @@ public class OptimizationOrchestrator {
                                    SimpleAgent simpleAgent,
                                    SpringAiLlmAgent llmAgent,
                                    SloBreachDetector sloBreachDetector,
-                                   SimpMessagingTemplate messagingTemplate) {
+                                   SimpMessagingTemplate messagingTemplate,
+                                   PlanWriter planWriter,
+                                   PlanAssembler planAssembler,
+                                   PolicyEngine policyEngine,
+                                   ActuationPolicy actuationPolicy,
+                                   ActuationBudgetLedger actuationBudgetLedger,
+                                   ActuationBudget actuationBudget,
+                                   AutonomyGate autonomyGate,
+                                   AutonomyConfig autonomyConfig,
+                                   ValidationExecutor validationExecutor,
+                                   RollbackExecutor rollbackExecutor,
+                                   ReportGenerator reportGenerator) {
         this.workloadSimulator = workloadSimulator;
         this.metricsLogger = metricsLogger;
         this.simpleAgent = simpleAgent;
         this.llmAgent = llmAgent;
         this.sloBreachDetector = sloBreachDetector;
         this.messagingTemplate = messagingTemplate;
+        this.planWriter = planWriter;
+        this.planAssembler = planAssembler;
+        this.policyEngine = policyEngine;
+        this.actuationPolicy = actuationPolicy;
+        this.actuationBudgetLedger = actuationBudgetLedger;
+        this.actuationBudget = actuationBudget;
+        this.autonomyGate = autonomyGate;
+        this.autonomyConfig = autonomyConfig;
+        this.validationExecutor = validationExecutor;
+        this.rollbackExecutor = rollbackExecutor;
+        this.reportGenerator = reportGenerator;
         this.objectMapper = new ObjectMapper()
                 .registerModule(new JavaTimeModule())
                 .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS)
@@ -130,18 +170,8 @@ public class OptimizationOrchestrator {
         writeJson(artifactsDir.resolve("baseline.json"), baseline);
         
         // Emit baseline metrics
-        Map<String, Object> baselineData = new HashMap<>();
-        baselineData.put(CONCURRENCY, baseline.getConcurrency());
-        baselineData.put(MEDIAN_LATENCY_MS, baseline.getMedianLatencyMs());
-        baselineData.put(AVG_LATENCY_MS, baseline.getAvgLatencyMs());
-        baselineData.put(P95_LATENCY_MS, baseline.getP95LatencyMs());
-        baselineData.put(REQUESTS_PER_SECOND, baseline.getRequestsPerSecond());
-        baselineData.put(TOTAL_REQUESTS, baseline.getTotalRequests());
-        baselineData.put(COST_ESTIMATE_USD, baseline.getCostEstimateUsd());
-        if (baseline.getHeapMetrics() != null) {
-            baselineData.put("heap_metrics", convertHeapMetrics(baseline.getHeapMetrics()));
-        }
-        emitEvent(ProgressEvent.metricUpdate("Baseline complete", baselineData));
+        emitEvent(ProgressEvent.metricUpdate("Baseline complete",
+                reportGenerator.buildRunSnapshot(baseline)));
         
         emitEvent(ProgressEvent.phaseUpdate(OptimizationPhase.BASELINE_COMPLETE, 
                 String.format("Baseline complete! Median latency: %.2fms, RPS: %.0f", 
@@ -218,6 +248,125 @@ public class OptimizationOrchestrator {
         emitEvent(ProgressEvent.reasoningUpdate(
                 String.format("🎯 Applying recommendation: %d → %d threads", baselineConcurrency, newConcurrency)));
 
+        // Phase 2.4: Autonomy Gate
+        AutonomyGateResult autonomyDecision = autonomyGate.evaluate(decision, autonomyConfig);
+        emitEvent(ProgressEvent.reasoningUpdate(
+                String.format("🤖 Autonomy gate: mode=%s → %s",
+                        autonomyDecision.mode(), autonomyDecision.outcome())));
+
+        if (!autonomyDecision.actuationPermitted()) {
+            emitEvent(ProgressEvent.reasoningUpdate(
+                    "🔵 Autonomy gate blocked actuation: " + autonomyDecision.reason()));
+            log.info("Autonomy gate blocked actuation: mode={} outcome={}",
+                    autonomyDecision.mode(), autonomyDecision.outcome());
+
+            OptimizationPlan advisoryPlan = planAssembler.buildAdvisoryPlan(
+                    baseline, decision, agentStrategy,
+                    finalSloBreached, finalBreachReason, autonomyDecision);
+            planWriter.write(advisoryPlan, artifactsDir);
+
+            Map<String, Object> advisoryReport = new HashMap<>();
+            advisoryReport.put("status", "advisory");
+            advisoryReport.put("autonomy_mode", autonomyDecision.mode().name());
+            advisoryReport.put("autonomy_outcome", autonomyDecision.outcome().name());
+            advisoryReport.put("reason", autonomyDecision.reason());
+            advisoryReport.put("recommendation", decision.getRecommendation());
+            advisoryReport.put("confidence", decision.getConfidenceScore());
+            advisoryReport.put("agent_strategy", agentStrategy);
+            emitEvent(ProgressEvent.phaseUpdate(OptimizationPhase.COMPLETE,
+                    "Run completed in advisory mode: " + autonomyDecision.mode()));
+            emitEvent(ProgressEvent.completeEvent(advisoryReport));
+            return advisoryReport;
+        }
+
+        // Phase 2.5: Policy Evaluation
+        Set<String> proposedResources = buildProposedResources(decision);
+        PolicyContext policyContext = PolicyContext.builder()
+                .baseline(baseline)
+                .proposedConcurrency(newConcurrency)
+                .proposedHeapSizeMb(decision.getRecommendedHeapSizeMb())
+                .confidenceScore(decision.getConfidenceScore())
+                .impactLevel(decision.getImpactLevel() != null ? decision.getImpactLevel().name() : null)
+                .proposedResources(proposedResources)
+                .build();
+
+        PolicyDecision policyDecision = policyEngine.evaluate(policyContext, actuationPolicy);
+        PolicyEvaluationResult policyResult = policyDecision.toPolicyEvaluationResult();
+
+        if (policyDecision.isDenied() || policyDecision.requiresApproval()) {
+            String reason = policyDecision.isDenied() ? "DENIED" : "REQUIRES_APPROVAL";
+            emitEvent(ProgressEvent.reasoningUpdate(
+                    String.format("🚫 Policy gate: %s — skipping actuation", reason)));
+            policyDecision.violations().forEach(v ->
+                    emitEvent(ProgressEvent.reasoningUpdate("  ✗ " + v.message())));
+            policyDecision.warnings().forEach(w ->
+                    emitEvent(ProgressEvent.reasoningUpdate("  ⚠ " + w.message())));
+            log.warn("Policy gate blocked execution: outcome={}", policyDecision.outcome());
+
+            OptimizationPlan blockedPlan = planAssembler.buildBlockedPlan(
+                    baseline, decision, agentStrategy,
+                    finalSloBreached, finalBreachReason, policyResult, null, autonomyDecision);
+            planWriter.write(blockedPlan, artifactsDir);
+
+            Map<String, Object> blockedReport = new HashMap<>();
+            blockedReport.put("status", "blocked");
+            blockedReport.put("policy_outcome", reason);
+            blockedReport.put("violations", policyDecision.violations().stream()
+                    .map(PolicyViolation::message).toList());
+            blockedReport.put("warnings", policyDecision.warnings().stream()
+                    .map(PolicyWarning::message).toList());
+            blockedReport.put("agent_strategy", agentStrategy);
+            emitEvent(ProgressEvent.phaseUpdate(OptimizationPhase.COMPLETE,
+                    "Run blocked by policy: " + reason));
+            emitEvent(ProgressEvent.completeEvent(blockedReport));
+            return blockedReport;
+        }
+
+        if (!policyDecision.warnings().isEmpty()) {
+            emitEvent(ProgressEvent.reasoningUpdate("⚠️  Policy warnings (proceeding with caution):"));
+            policyDecision.warnings().forEach(w ->
+                    emitEvent(ProgressEvent.reasoningUpdate("  ⚠ " + w.message())));
+        }
+
+        // Phase 2.6: Actuation Budget Gate
+        List<ProposedChangeDelta> proposedDeltas = buildProposedDeltas(baseline, newConcurrency, decision);
+        BudgetConsumption budgetConsumption = actuationBudgetLedger.evaluate(proposedDeltas, actuationBudget);
+
+        if (!budgetConsumption.withinBudget()) {
+            emitEvent(ProgressEvent.reasoningUpdate(
+                    "💰 Budget gate: EXCEEDED — " + budgetConsumption.denialReason()));
+            emitEvent(ProgressEvent.reasoningUpdate(
+                    String.format("   changes: %d/%d  totalDelta: %.1f%%/%.1f%%",
+                            budgetConsumption.changesAttempted(), budgetConsumption.maxChangesPerRun(),
+                            budgetConsumption.totalDeltaPctConsumed(), budgetConsumption.maxTotalDeltaPct())));
+            log.warn("Budget gate blocked execution: {}", budgetConsumption.denialReason());
+
+            OptimizationPlan budgetBlockedPlan = planAssembler.buildBlockedPlan(
+                    baseline, decision, agentStrategy,
+                    finalSloBreached, finalBreachReason, policyResult, budgetConsumption, autonomyDecision);
+            planWriter.write(budgetBlockedPlan, artifactsDir);
+
+            Map<String, Object> budgetReport = new HashMap<>();
+            budgetReport.put("status", "blocked");
+            budgetReport.put("policy_outcome", "BUDGET_EXCEEDED");
+            budgetReport.put("budget_denial_reason", budgetConsumption.denialReason());
+            budgetReport.put("changes_attempted", budgetConsumption.changesAttempted());
+            budgetReport.put("max_changes_per_run", budgetConsumption.maxChangesPerRun());
+            budgetReport.put("total_delta_pct", budgetConsumption.totalDeltaPctConsumed());
+            budgetReport.put("max_total_delta_pct", budgetConsumption.maxTotalDeltaPct());
+            budgetReport.put("agent_strategy", agentStrategy);
+            emitEvent(ProgressEvent.phaseUpdate(OptimizationPhase.COMPLETE,
+                    "Run blocked by actuation budget"));
+            emitEvent(ProgressEvent.completeEvent(budgetReport));
+            return budgetReport;
+        }
+
+        emitEvent(ProgressEvent.reasoningUpdate(
+                String.format("💰 Budget gate: OK — %d change(s), %.1f%% total delta (limit: %.1f%%)",
+                        budgetConsumption.changesAttempted(),
+                        budgetConsumption.totalDeltaPctConsumed(),
+                        budgetConsumption.maxTotalDeltaPct())));
+
         // Phase 3: Post-Optimization Load Test
         emitEvent(ProgressEvent.phaseUpdate(OptimizationPhase.OPTIMIZATION_RUNNING, 
                 String.format("Running optimized test with %d threads...", newConcurrency)));
@@ -225,18 +374,8 @@ public class OptimizationOrchestrator {
         RunResult after = workloadSimulator.executeLoad(newConcurrency, loadDuration, targetRps);
         writeJson(artifactsDir.resolve("after.json"), after);
         
-        Map<String, Object> afterData = new HashMap<>();
-        afterData.put(CONCURRENCY, after.getConcurrency());
-        afterData.put(MEDIAN_LATENCY_MS, after.getMedianLatencyMs());
-        afterData.put(AVG_LATENCY_MS, after.getAvgLatencyMs());
-        afterData.put(P95_LATENCY_MS, after.getP95LatencyMs());
-        afterData.put(REQUESTS_PER_SECOND, after.getRequestsPerSecond());
-        afterData.put(TOTAL_REQUESTS, after.getTotalRequests());
-        afterData.put(COST_ESTIMATE_USD, after.getCostEstimateUsd());
-        if (after.getHeapMetrics() != null) {
-            afterData.put("heap_metrics", convertHeapMetrics(after.getHeapMetrics()));
-        }
-        emitEvent(ProgressEvent.metricUpdate("Optimization complete", afterData));
+        emitEvent(ProgressEvent.metricUpdate("Optimization complete",
+                reportGenerator.buildRunSnapshot(after)));
         
         emitEvent(ProgressEvent.phaseUpdate(OptimizationPhase.OPTIMIZATION_COMPLETE, 
                 String.format("Optimized test complete! Median latency: %.2fms, RPS: %.0f", 
@@ -247,13 +386,36 @@ public class OptimizationOrchestrator {
             sloBreachDetector.recordMetric(after);
         }
 
+        // Phase 4.5: Validation + Rollback (Phase 5 of the implementation plan)
+        double sloThresholdMs = sloTargetP99Ms * sloBreachThreshold;
+        ValidationResult validationResult = validationExecutor.validate(after, sloThresholdMs);
+        emitEvent(ProgressEvent.reasoningUpdate(
+                String.format("✅ Validation: %s — p99=%.1fms threshold=%.1fms",
+                        validationResult.status(), validationResult.measuredP99Ms(), sloThresholdMs)));
+
+        List<PlanChange> proposedChanges = planAssembler.buildProposedChanges(baseline, decision);
+        RollbackResult rollbackResult = rollbackExecutor.maybeRollback(
+                validationResult, proposedChanges,
+                baselineConcurrency, loadDuration, targetRps);
+        if (rollbackResult.status() != RollbackResult.RollbackStatus.SKIPPED_VALIDATION_PASSED) {
+            emitEvent(ProgressEvent.reasoningUpdate(
+                    String.format("🔄 Rollback: %s — %s",
+                            rollbackResult.status(), rollbackResult.reason())));
+        }
+
         // Phase 4: Generate Report
         emitEvent(ProgressEvent.phaseUpdate(OptimizationPhase.GENERATING_REPORT, "Generating comparison report..."));
         
-        Map<String, Object> report = generateReport(baseline, after, decision, agentStrategy,
-                finalSloBreached, finalBreachReason);
+        Map<String, Object> report = reportGenerator.generateReport(baseline, after, decision,
+                agentStrategy, finalSloBreached, finalBreachReason);
         writeJson(artifactsDir.resolve("report.json"), report);
-        
+
+        // Emit OptimizationPlan artifact (single source of truth for this run)
+        OptimizationPlan plan = planAssembler.buildPlan(baseline, after, decision, agentStrategy,
+                finalSloBreached, finalBreachReason, policyResult, budgetConsumption, autonomyDecision,
+                validationResult, rollbackResult);
+        planWriter.write(plan, artifactsDir);
+
         emitEvent(ProgressEvent.phaseUpdate(OptimizationPhase.COMPLETE, "Optimization complete!"));
         emitEvent(ProgressEvent.completeEvent(report));
         
@@ -278,116 +440,48 @@ public class OptimizationOrchestrator {
         return defaultValue;
     }
 
-    private Map<String, Object> generateReport(RunResult baseline, RunResult after, 
-                                               AgentDecision decision, String agentStrategy,
-                                               boolean sloBreached, String breachReason) {
-        Map<String, Object> report = new HashMap<>();
-        
-        report.put("agent_strategy", agentStrategy);
-        report.put("timestamp", java.time.Instant.now().toString());
-        
-        Map<String, Object> baselineMap = new HashMap<>();
-        baselineMap.put(CONCURRENCY, baseline.getConcurrency());
-        baselineMap.put(MEDIAN_LATENCY_MS, baseline.getMedianLatencyMs());
-        baselineMap.put(AVG_LATENCY_MS, baseline.getAvgLatencyMs());
-        baselineMap.put(P95_LATENCY_MS, baseline.getP95LatencyMs());
-        baselineMap.put("p99_latency_ms", baseline.getP99LatencyMs());
-        baselineMap.put(REQUESTS_PER_SECOND, baseline.getRequestsPerSecond());
-        baselineMap.put(TOTAL_REQUESTS, baseline.getTotalRequests());
-        baselineMap.put(COST_ESTIMATE_USD, baseline.getCostEstimateUsd());
-        if (baseline.getHeapMetrics() != null) {
-            baselineMap.put("heap_metrics", convertHeapMetrics(baseline.getHeapMetrics()));
-        }
-        report.put("baseline", baselineMap);
-        
-        Map<String, Object> afterMap = new HashMap<>();
-        afterMap.put(CONCURRENCY, after.getConcurrency());
-        afterMap.put(MEDIAN_LATENCY_MS, after.getMedianLatencyMs());
-        afterMap.put(AVG_LATENCY_MS, after.getAvgLatencyMs());
-        afterMap.put(P95_LATENCY_MS, after.getP95LatencyMs());
-        afterMap.put("p99_latency_ms", after.getP99LatencyMs());
-        afterMap.put(REQUESTS_PER_SECOND, after.getRequestsPerSecond());
-        afterMap.put(TOTAL_REQUESTS, after.getTotalRequests());
-        afterMap.put(COST_ESTIMATE_USD, after.getCostEstimateUsd());
-        if (after.getHeapMetrics() != null) {
-            afterMap.put("heap_metrics", convertHeapMetrics(after.getHeapMetrics()));
-        }
-        report.put("after", afterMap);
-        
-        Map<String, Object> improvements = new HashMap<>();
-        improvements.put("latency_change_ms", after.getMedianLatencyMs() - baseline.getMedianLatencyMs());
-        improvements.put("latency_change_percent", 
-                calculatePercentChange(baseline.getMedianLatencyMs(), after.getMedianLatencyMs()));
-        
-        // p95/p99 improvements (critical for FinTech SLAs)
-        improvements.put("p95_change_ms", after.getP95LatencyMs() - baseline.getP95LatencyMs());
-        improvements.put("p95_change_percent",
-                calculatePercentChange(baseline.getP95LatencyMs(), after.getP95LatencyMs()));
-        improvements.put("p99_change_ms", after.getP99LatencyMs() - baseline.getP99LatencyMs());
-        improvements.put("p99_change_percent",
-                calculatePercentChange(baseline.getP99LatencyMs(), after.getP99LatencyMs()));
-        
-        improvements.put("throughput_change_rps", after.getRequestsPerSecond() - baseline.getRequestsPerSecond());
-        improvements.put("throughput_change_percent", 
-                calculatePercentChange(baseline.getRequestsPerSecond(), after.getRequestsPerSecond()));
-        improvements.put("concurrency_change", after.getConcurrency() - baseline.getConcurrency());
-        report.put("improvements", improvements);
-        
-        Map<String, Object> decisionMap = new HashMap<>();
-        decisionMap.put("recommendation", decision.getRecommendation());
-        if (decision.getRecommendedHeapSizeMb() != null) {
-            decisionMap.put("recommended_heap_size_mb", decision.getRecommendedHeapSizeMb());
-        }
-        decisionMap.put("reasoning", decision.getReasoning());
-        decisionMap.put("confidence_score", decision.getConfidenceScore());
-        if (decision.getConcurrencyConfidence() != null) {
-            decisionMap.put("concurrency_confidence", decision.getConcurrencyConfidence());
-        }
-        if (decision.getHeapConfidence() != null) {
-            decisionMap.put("heap_confidence", decision.getHeapConfidence());
-        }
-        decisionMap.put("impact_level", decision.getImpactLevel().toString());
-        report.put("decision", decisionMap);
-
-        // SLO compliance section
-        Map<String, Object> sloMap = new HashMap<>();
-        sloMap.put("enabled", sloEnabled);
-        sloMap.put("breached", sloBreached);
-        if (breachReason != null) {
-            sloMap.put("breach_reason", breachReason);
-        }
-        sloMap.put("target_p99_ms", sloTargetP99Ms);
-        sloMap.put("breach_threshold_ms", sloTargetP99Ms * sloBreachThreshold);
-        sloMap.put("baseline_p99_ms", baseline.getP99LatencyMs());
-        sloMap.put("after_p99_ms", after.getP99LatencyMs());
-        boolean sloRestoredAfter = after.getP99LatencyMs() <= (sloTargetP99Ms * sloBreachThreshold);
-        sloMap.put("slo_restored_after_optimization", sloRestoredAfter);
-        report.put("slo_compliance", sloMap);
-        
-        return report;
-    }
-
-    private double calculatePercentChange(double baseline, double after) {
-        if (baseline == 0) {
-            return 0.0;
-        }
-        return ((after - baseline) / baseline) * 100.0;
-    }
-
-    private Map<String, Object> convertHeapMetrics(HeapMetrics heap) {
-        Map<String, Object> heapMap = new HashMap<>();
-        heapMap.put("heap_size_mb", heap.getHeapSizeMb());
-        heapMap.put("heap_used_mb", heap.getHeapUsedMb());
-        heapMap.put("heap_usage_percent", heap.getHeapUsagePercent());
-        heapMap.put("gc_count", heap.getGcCount());
-        heapMap.put("gc_time_ms", heap.getGcTimeMs());
-        heapMap.put("gc_pause_time_avg_ms", heap.getGcPauseTimeAvgMs());
-        heapMap.put("gc_frequency_per_sec", heap.getGcFrequencyPerSec());
-        return heapMap;
-    }
 
     private void writeJson(Path path, Object obj) throws IOException {
         objectMapper.writeValue(path.toFile(), obj);
         log.debug("Written: {}", path);
+    }
+
+    /** Builds the set of resource identifiers the agent proposes to change. */
+    /**
+     * Computes the per-resource absolute delta percentages for the proposed changes.
+     * Used as input to the actuation budget gate.
+     */
+    private List<ProposedChangeDelta> buildProposedDeltas(RunResult baseline,
+                                                          int proposedConcurrency,
+                                                          AgentDecision decision) {
+        List<ProposedChangeDelta> deltas = new java.util.ArrayList<>();
+
+        if (proposedConcurrency != baseline.getConcurrency()) {
+            deltas.add(ProposedChangeDelta.compute(
+                    "jvm.concurrency",
+                    baseline.getConcurrency(),
+                    proposedConcurrency));
+        }
+
+        if (decision.getRecommendedHeapSizeMb() != null && baseline.getHeapMetrics() != null) {
+            deltas.add(ProposedChangeDelta.compute(
+                    "jvm.heap_size_mb",
+                    baseline.getHeapMetrics().getHeapSizeMb(),
+                    decision.getRecommendedHeapSizeMb()));
+        }
+
+        return deltas;
+    }
+
+    private Set<String> buildProposedResources(AgentDecision decision) {
+        Set<String> resources = new HashSet<>();
+        int proposed = extractConcurrency(decision.getRecommendation(), baselineConcurrency);
+        if (proposed != baselineConcurrency) {
+            resources.add("jvm.concurrency");
+        }
+        if (decision.getRecommendedHeapSizeMb() != null) {
+            resources.add("jvm.heap_size_mb");
+        }
+        return resources;
     }
 }

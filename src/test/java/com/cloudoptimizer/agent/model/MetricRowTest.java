@@ -95,40 +95,40 @@ class MetricRowTest {
 
     @Test
     void testBuilderMissingResourceId() {
-        // Lombok builder allows missing fields - no validation by default
+        // Builder defaults to "unknown" when resourceId not provided
         MetricRow metric = MetricRow.builder()
                 .resourceType("EC2")
                 .metricName("CPUUtilization")
                 .metricValue(75.5)
                 .build();
         
-        assertNull(metric.getResourceId());
+        assertEquals("unknown", metric.getResourceId());
         assertEquals("EC2", metric.getResourceType());
     }
 
     @Test
     void testBuilderMissingResourceType() {
-        // Lombok builder allows missing fields - no validation by default
+        // Builder defaults to "unknown" when resourceType not provided
         MetricRow metric = MetricRow.builder()
                 .resourceId("i-1234567890abcdef0")
                 .metricName("CPUUtilization")
                 .metricValue(75.5)
                 .build();
         
-        assertNull(metric.getResourceType());
+        assertEquals("unknown", metric.getResourceType());
         assertEquals("i-1234567890abcdef0", metric.getResourceId());
     }
 
     @Test
     void testBuilderMissingMetricName() {
-        // Lombok builder allows missing fields - no validation by default
+        // Builder defaults to "unnamed" when metricName not provided
         MetricRow metric = MetricRow.builder()
                 .resourceId("i-1234567890abcdef0")
                 .resourceType("EC2")
                 .metricValue(75.5)
                 .build();
         
-        assertNull(metric.getMetricName());
+        assertEquals("unnamed", metric.getMetricName());
         assertEquals(75.5, metric.getMetricValue());
     }
 

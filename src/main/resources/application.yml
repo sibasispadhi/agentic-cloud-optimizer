@@ -34,6 +34,118 @@ logging:
 agent:
   target-latency-ms: 100.0
   artifacts-dir: artifacts
+  strategy: ${AGENT_STRATEGY:llm}  # llm (Ollama) or simple (rule-based)
+  llm:
+    # Concurrency output bounds — LLM recommendations are clamped to this range
+    min-concurrency: 1
+    max-concurrency: 100
+    # Impact level thresholds (% change relative to current concurrency)
+    impact:
+      critical-change-pct: 50.0   # ≥50% change → CRITICAL
+      high-change-pct: 25.0       # ≥25% change → HIGH
+      medium-change-pct: 10.0     # ≥10% change → MEDIUM (else LOW)
+    # Confidence score by change magnitude
+    confidence:
+      low-change: 0.90            # <10% change
+      medium-change: 0.80         # <25% change
+      large-change: 0.70          # <50% change
+      very-large-change: 0.60     # ≥50% change
+    fallback-confidence: 0.50     # returned when LLM is unavailable
+  rules:
+    # Latency / concurrency thresholds
+    low-threshold-factor: 0.7          # fraction of target below which concurrency is reduced
+    concurrency-scale-up-factor: 1.5   # multiplier when latency is too high
+    concurrency-scale-down-factor: 0.75 # multiplier when latency is too low
+    heap:
+      # High-pressure triggers (Rule 1)
+      gc-freq-high-per-sec: 1.0        # GC frequency above which heap pressure is high
+      usage-high-percent: 80.0         # heap usage % above which pressure is high
+      # Medium-pressure triggers (Rule 2)
+      gc-pause-high-ms: 100.0          # GC pause avg above which latency impact is flagged
+      usage-medium-percent: 70.0       # heap usage % threshold for medium-pressure rule
+      # Over-provisioned triggers (Rule 3)
+      gc-freq-low-per-sec: 0.5         # GC frequency below which heap is over-provisioned
+      usage-low-percent: 50.0          # heap usage % below which heap is over-provisioned
+      # Scale factors
+      scale-up-large-factor: 1.5       # heap multiplier for high-pressure scenario
+      scale-up-small-factor: 1.25      # heap multiplier for medium-pressure scenario
+      scale-down-factor: 0.75          # heap multiplier for right-sizing
+      min-heap-mb: 256                 # absolute minimum recommended heap in MB
+
+  # ── Policy Engine (Phase 2) ──────────────────────────────────────────────────
+  # Governance constraints evaluated before every actuation.
+  # A DENIED or REQUIRES_APPROVAL decision blocks the after-test from running.
+  policy:
+    # Max allowed concurrency change relative to baseline (percentage, 0–100).
+    # Example: 50.0 means concurrency may not increase/decrease by more than 50%.
+    max-concurrency-delta-pct: 50.0
+
+    # Max allowed heap size change relative to current heap (percentage, 0–100).
+    max-heap-delta-pct: 50.0
+
+    # Absolute concurrency bounds — proposed value must fall within this range.
+    min-concurrency: 1
+    max-concurrency: 100
+
+    # Absolute heap size bounds (MB) — proposed value must fall within this range.
+    min-heap-mb: 128
+    max-heap-mb: 16384
+
+    # Agent confidence below this threshold escalates to REQUIRES_APPROVAL.
+    # Range [0.0, 1.0].  Set to 0.0 to disable confidence gating.
+    min-confidence-to-act: 0.60
+
+    # Minimum seconds between two applied changes.  0 = cooldown disabled.
+    cooldown-seconds: 0
+
+    # Resources the agent is never permitted to change.  Empty = no restrictions.
+    # Example: ["jvm.heap_size_mb"] to lock heap size.
+    forbidden-resources: []
+
+    # Impact levels that require human approval before execution.
+    # Valid values: LOW, MEDIUM, HIGH, CRITICAL
+    impact-levels-requiring-approval:
+      - CRITICAL
+
+  # ── Actuation Budget (Phase 3) ───────────────────────────────────────────────
+  # Hard limits on how much change ACO can make in a single optimization run.
+  # Enforced after the Policy Gate — a budget breach blocks the after-test
+  # and writes a FAILED OptimizationPlan artifact with the consumption record.
+  budget:
+    # Maximum number of distinct resource changes allowed per run.
+    # Example: 2 = agent may change at most concurrency AND heap in one cycle.
+    max-changes-per-run: 5
+
+    # Maximum sum of absolute percentage changes across all resources per run.
+    # Example: if concurrency changes +25% and heap -30%, total delta = 55%.
+    # A limit of 75% allows this; a limit of 50% would deny it.
+    max-total-delta-pct: 75.0
+
+    # Informational scope label — recorded in the artifact for audit purposes.
+    # Does not affect enforcement. Values: single-service | environment | region.
+    blast-radius-scope: single-service
+
+  # ── Autonomy Mode (Phase 4) ────────────────────────────────────────────────
+  # Controls how much autonomy the agent exercises per run.
+  # Evaluated before the policy gate — OBSERVE_ONLY and ADVISORY_ONLY modes
+  # skip the policy gate entirely and never run the after-test.
+  autonomy:
+    # Active mode. Options:
+    #   OBSERVE_ONLY         — baseline + recommendation only, no actuation
+    #   ADVISORY_ONLY        — plan emitted as artifact, no after-test
+    #   AUTO_LOW_RISK        — auto-actuate only for LOW-impact, high-confidence changes
+    #   AUTO_POLICY_GOVERNED — full automation bounded by policy + budget (default)
+    mode: AUTO_POLICY_GOVERNED
+
+    # [AUTO_LOW_RISK only] Maximum impact level that triggers auto-actuation.
+    # Changes with higher impact are escalated to REQUIRES_APPROVAL.
+    # Valid values: LOW | MEDIUM | HIGH | CRITICAL
+    low-risk-max-impact-level: LOW
+
+    # [AUTO_LOW_RISK only] Minimum agent confidence required for auto-actuation.
+    # Runs with lower confidence are escalated to REQUIRES_APPROVAL.
+    # Range [0.0, 1.0]
+    low-risk-min-confidence: 0.75
 
 # SLO Breach Detection (Monitoring/Alerting layer)
 slo:

@@ -3,15 +3,14 @@ package com.cloudoptimizer.agent.service;
 import com.cloudoptimizer.agent.model.AgentDecision;
 import com.cloudoptimizer.agent.model.MetricRow;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.ai.chat.ChatClient;
 import org.springframework.ai.chat.ChatResponse;
 import org.springframework.ai.chat.Generation;
-import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.prompt.Prompt;
 
+import java.lang.reflect.Field;
 import java.nio.file.Path;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -23,24 +22,20 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 /**
- * Unit tests for SpringAiLlmAgent.
- * 
- * Uses mocked ChatClient to test LLM agent logic without requiring
- * actual Ollama installation.
- * 
- * NOTE: These tests are temporarily disabled due to ChatResponse being a final class
- * that requires special mocking configuration. The main functionality is tested
- * through integration tests and SimpleAgent tests verify the core logic.
- * 
+ * Unit tests for {@link SpringAiLlmAgent}.
+ *
+ * <p>Uses mocked {@link ChatClient} to verify LLM agent logic without
+ * requiring a live Ollama instance. {@code mockito-inline} on the classpath
+ * enables mocking of final Spring-AI classes ({@link ChatResponse},
+ * {@link Generation}).
+ *
  * @author Sibasis Padhi
- * @version 1.0
  */
-@Disabled("LLM tests disabled - ChatResponse mocking issues with Spring AI 0.8.0")
 class SpringAiLlmAgentTest {
 
     private SpringAiLlmAgent agent;
     private ChatClient mockChatClient;
-    
+
     @TempDir
     Path tempDir;
 
@@ -48,36 +43,33 @@ class SpringAiLlmAgentTest {
     void setUp() {
         mockChatClient = mock(ChatClient.class);
         agent = new SpringAiLlmAgent(mockChatClient);
-        
-        // Set test values via reflection (since they're @Value injected)
-        try {
-            var targetLatencyField = SpringAiLlmAgent.class.getDeclaredField("targetLatencyMs");
-            targetLatencyField.setAccessible(true);
-            targetLatencyField.set(agent, 100.0);
-            
-            var artifactsDirField = SpringAiLlmAgent.class.getDeclaredField("artifactsDir");
-            artifactsDirField.setAccessible(true);
-            artifactsDirField.set(agent, tempDir.toString());
-        } catch (Exception e) {
-            fail("Failed to set test fields: " + e.getMessage());
-        }
+
+        // Inject @Value fields — Spring context is not available in unit tests
+        setField("targetLatencyMs",          100.0);
+        setField("artifactsDir",             tempDir.toString());
+        setField("minConcurrency",           1);
+        setField("maxConcurrency",           100);
+        setField("impactCriticalChangePct",  50.0);
+        setField("impactHighChangePct",      25.0);
+        setField("impactMediumChangePct",    10.0);
+        setField("confidenceLowChange",      0.90);
+        setField("confidenceMediumChange",   0.80);
+        setField("confidenceLargeChange",    0.70);
+        setField("confidenceVeryLargeChange",0.60);
+        setField("fallbackConfidence",       0.50);
     }
+
+    // ── Happy-path tests ──────────────────────────────────────────────────────
 
     @Test
     void testDecide_SuccessfulLlmResponse() {
-        // Arrange
-        List<MetricRow> metrics = createTestMetrics(150.0, 20); // High latency
-        int currentConcurrency = 4;
-        
-        // Mock LLM response
-        String llmJsonResponse = "{\"newConcurrency\": 6, \"expectedLatencyMs\": 85.0, \"explanation\": \"Latency is high, increasing concurrency to improve throughput.\"}";
-        ChatResponse mockResponse = createMockChatResponse(llmJsonResponse);
-        when(mockChatClient.call(any(Prompt.class))).thenReturn(mockResponse);
-        
-        // Act
-        AgentDecision decision = agent.decide(metrics, currentConcurrency);
-        
-        // Assert
+        List<MetricRow> metrics = createTestMetrics(150.0, 20);
+        String json = "{'newConcurrency': 6, 'expectedLatencyMs': 85.0, 'explanation': 'Latency is high, increasing concurrency.'}"
+                .replace("'", "\"");
+        when(mockChatClient.call(any(Prompt.class))).thenReturn(mockResponse(json));
+
+        AgentDecision decision = agent.decide(metrics, 4);
+
         assertNotNull(decision);
         assertEquals("Set concurrency to 6", decision.getRecommendation());
         assertTrue(decision.getReasoning().contains("Latency is high"));
@@ -87,104 +79,79 @@ class SpringAiLlmAgentTest {
 
     @Test
     void testDecide_LlmResponseWithMarkdownCodeBlock() {
-        // Arrange
-        List<MetricRow> metrics = createTestMetrics(50.0, 20); // Low latency
-        int currentConcurrency = 8;
-        
-        // Mock LLM response with markdown code block
-        String llmJsonResponse = "```json\n{\"newConcurrency\": 5, \"expectedLatencyMs\": 55.0, \"explanation\": \"Latency below target, reducing concurrency to save resources.\"}\n```";
-        ChatResponse mockResponse = createMockChatResponse(llmJsonResponse);
-        when(mockChatClient.call(any(Prompt.class))).thenReturn(mockResponse);
-        
-        // Act
-        AgentDecision decision = agent.decide(metrics, currentConcurrency);
-        
-        // Assert
+        List<MetricRow> metrics = createTestMetrics(50.0, 20);
+        String json = ("```json\n{'newConcurrency': 5, 'expectedLatencyMs': 55.0, "
+                + "'explanation': 'Latency below target, reducing concurrency.'}\n```")
+                .replace("'", "\"");
+        when(mockChatClient.call(any(Prompt.class))).thenReturn(mockResponse(json));
+
+        AgentDecision decision = agent.decide(metrics, 8);
+
         assertNotNull(decision);
         assertEquals("Set concurrency to 5", decision.getRecommendation());
         assertTrue(decision.getReasoning().contains("reducing concurrency"));
     }
 
+    // ── Error / fallback tests ────────────────────────────────────────────────
+
     @Test
-    void testDecide_InvalidJsonFallback() {
-        // Arrange
-        List<MetricRow> metrics = createTestMetrics(100.0, 20);
-        int currentConcurrency = 4;
-        
-        // Mock invalid LLM response
-        String invalidResponse = "This is not JSON at all!";
-        ChatResponse mockResponse = createMockChatResponse(invalidResponse);
-        when(mockChatClient.call(any(Prompt.class))).thenReturn(mockResponse);
-        
-        // Act & Assert
-        assertThrows(RuntimeException.class, () -> {
-            agent.decide(metrics, currentConcurrency);
-        });
+    void testDecide_InvalidJsonReturnsFallback() {
+        // Invalid JSON cannot be parsed → exception is caught → fallback returned
+        when(mockChatClient.call(any(Prompt.class))).thenReturn(mockResponse("Not JSON at all!"));
+
+        AgentDecision decision = agent.decide(createTestMetrics(100.0, 20), 4);
+
+        assertNotNull(decision);
+        assertTrue(decision.getRecommendation().contains("Maintain concurrency"),
+                "Expected fallback recommendation but got: " + decision.getRecommendation());
+        assertEquals(0.50, decision.getConfidenceScore(), 0.01);
     }
 
     @Test
-    void testDecide_LlmExceptionFallback() {
-        // Arrange
-        List<MetricRow> metrics = createTestMetrics(100.0, 20);
-        int currentConcurrency = 4;
-        
-        // Mock LLM exception (Ollama not available)
-        when(mockChatClient.call(any(Prompt.class))).thenThrow(new RuntimeException("Connection refused to Ollama"));
-        
-        // Act
-        AgentDecision decision = agent.decide(metrics, currentConcurrency);
-        
-        // Assert
+    void testDecide_LlmExceptionReturnsFallback() {
+        when(mockChatClient.call(any(Prompt.class)))
+                .thenThrow(new RuntimeException("Connection refused to Ollama"));
+
+        AgentDecision decision = agent.decide(createTestMetrics(100.0, 20), 4);
+
         assertNotNull(decision);
         assertTrue(decision.getRecommendation().contains("Maintain concurrency"));
         assertTrue(decision.getReasoning().contains("LLM agent encountered error"));
         assertEquals(0.50, decision.getConfidenceScore(), 0.01);
     }
 
+    // ── Guard tests ───────────────────────────────────────────────────────────
+
     @Test
-    void testDecide_EmptyMetricsList() {
-        // Arrange
-        List<MetricRow> emptyMetrics = new ArrayList<>();
-        int currentConcurrency = 4;
-        
-        // Act & Assert
-        assertThrows(IllegalArgumentException.class, () -> {
-            agent.decide(emptyMetrics, currentConcurrency);
-        });
+    void testDecide_EmptyMetricsListThrows() {
+        assertThrows(IllegalArgumentException.class,
+                () -> agent.decide(new ArrayList<>(), 4));
     }
 
     @Test
-    void testDecide_NullMetricsList() {
-        // Arrange
-        int currentConcurrency = 4;
-        
-        // Act & Assert
-        assertThrows(IllegalArgumentException.class, () -> {
-            agent.decide(null, currentConcurrency);
-        });
+    void testDecide_NullMetricsListThrows() {
+        assertThrows(IllegalArgumentException.class,
+                () -> agent.decide(null, 4));
     }
+
+    // ── Bounds / policy tests ─────────────────────────────────────────────────
 
     @Test
-    void testDecide_ConcurrencyBounds() {
-        // Arrange
-        List<MetricRow> metrics = createTestMetrics(100.0, 20);
-        int currentConcurrency = 4;
-        
-        // Mock LLM response with out-of-bounds concurrency
-        String llmJsonResponse = "{\"newConcurrency\": 150, \"expectedLatencyMs\": 50.0, \"explanation\": \"Testing bounds\"}";
-        ChatResponse mockResponse = createMockChatResponse(llmJsonResponse);
-        when(mockChatClient.call(any(Prompt.class))).thenReturn(mockResponse);
-        
-        // Act
-        AgentDecision decision = agent.decide(metrics, currentConcurrency);
-        
-        // Assert - Should be clamped to max 100
-        assertTrue(decision.getRecommendation().contains("100"));
+    void testDecide_ConcurrencyClampedToMax() {
+        // LLM returns 150 - should be clamped to maxConcurrency (100)
+        String json = "{'newConcurrency': 150, 'expectedLatencyMs': 50.0, 'explanation': 'Testing bounds'}"
+                .replace("'", "\"");
+        when(mockChatClient.call(any(Prompt.class))).thenReturn(mockResponse(json));
+
+        AgentDecision decision = agent.decide(createTestMetrics(100.0, 20), 4);
+
+        assertNotNull(decision);
+        assertTrue(decision.getRecommendation().contains("100"),
+                "Expected concurrency clamped to 100 but got: " + decision.getRecommendation());
     }
 
-    /**
-     * Helper method to create test metrics.
-     */
+    // ── Helpers ───────────────────────────────────────────────────────────────
+
     private List<MetricRow> createTestMetrics(double latencyMs, int count) {
         List<MetricRow> metrics = new ArrayList<>();
         for (int i = 0; i < count; i++) {
@@ -192,7 +159,7 @@ class SpringAiLlmAgentTest {
                     .resourceId("test-resource")
                     .resourceType("TestService")
                     .metricName("latencyMs")
-                    .metricValue(latencyMs + (Math.random() * 20 - 10)) // Add some variance
+                    .metricValue(latencyMs + (Math.random() * 20 - 10))
                     .unit("ms")
                     .timestamp(Instant.now().minusSeconds(count - i))
                     .build());
@@ -200,17 +167,19 @@ class SpringAiLlmAgentTest {
         return metrics;
     }
 
-    /**
-     * Helper method to create mock ChatResponse.
-     */
-    private ChatResponse createMockChatResponse(String content) {
-        ChatResponse mockResponse = mock(ChatResponse.class);
-        Generation mockGeneration = mock(Generation.class);
-        AssistantMessage mockMessage = new AssistantMessage(content);
-        
-        when(mockGeneration.getOutput()).thenReturn(mockMessage);
-        when(mockResponse.getResult()).thenReturn(mockGeneration);
-        
-        return mockResponse;
+    /** Returns a real ChatResponse built from the given content string. */
+    private ChatResponse mockResponse(String content) {
+        return new ChatResponse(List.of(new Generation(content)));
+    }
+
+    /** Sets a private field on {@code agent} via reflection. */
+    private void setField(String name, Object value) {
+        try {
+            Field f = SpringAiLlmAgent.class.getDeclaredField(name);
+            f.setAccessible(true);
+            f.set(agent, value);
+        } catch (Exception e) {
+            fail("Failed to inject field '" + name + "': " + e.getMessage());
+        }
     }
 }

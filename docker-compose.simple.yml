@@ -1,0 +1,59 @@
+# =============================================================================
+# Agent Cloud Optimizer - Docker Compose (Simple Mode - No LLM!)
+# =============================================================================
+# 
+# FASTEST & SIMPLEST way to run ACO!
+# Uses rule-based SimpleAgent - no LLM, no API keys, no Ollama.
+# 
+# Perfect for:
+#   - Quick demos
+#   - CI/CD pipelines
+#   - Resource-constrained environments
+#   - Getting started before adding LLM
+#
+# Start: docker compose -f docker-compose.simple.yml up
+# Open:  http://localhost:8081/live-dashboard.html
+# =============================================================================
+
+version: '3.8'
+
+services:
+  # ---------------------------------------------------------------------------
+  # ACO - Agent Cloud Optimizer (SimpleAgent mode)
+  # ---------------------------------------------------------------------------
+  aco:
+    build: .
+    container_name: aco
+    ports:
+      - "8081:8081"
+    environment:
+      - SERVER_PORT=8081
+      - AGENT_STRATEGY=simple  # Rule-based agent, no LLM!
+      - JAVA_OPTS=-Xms128m -Xmx256m
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8081/v1/work/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    restart: unless-stopped
+
+# =============================================================================
+# SimpleAgent vs LLM Agent:
+# =============================================================================
+#
+# SimpleAgent (this file):
+#   ✅ Fast startup (~5 seconds)
+#   ✅ No dependencies
+#   ✅ Deterministic decisions
+#   ✅ Low resource usage (~128MB RAM)
+#   ❌ Less sophisticated reasoning
+#
+# LLM Agent (docker-compose.yml or docker-compose.openai.yml):
+#   ✅ Intelligent analysis
+#   ✅ Natural language explanations
+#   ✅ Handles edge cases better
+#   ❌ Requires Ollama or OpenAI API
+#   ❌ Higher resource usage
+#
+# =============================================================================

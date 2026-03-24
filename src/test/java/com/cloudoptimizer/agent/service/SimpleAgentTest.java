@@ -1,8 +1,6 @@
 package com.cloudoptimizer.agent.service;
 
-import com.cloudoptimizer.agent.model.AgentDecision;
-import com.cloudoptimizer.agent.model.AgentStrategy;
-import com.cloudoptimizer.agent.model.MetricRow;
+import com.cloudoptimizer.agent.model.*;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -16,323 +14,315 @@ import static org.junit.jupiter.api.Assertions.*;
 
 /**
  * Unit tests for SimpleAgent rule-based optimization logic.
- * 
- * Tests the three main decision rules:
- * 1. High latency → INCREASE concurrency
- * 2. Low latency → DECREASE concurrency
- * 3. Within acceptable range → MAINTAIN concurrency
- * 
+ *
+ * <p>Covers:</p>
+ * <ul>
+ *   <li>All three concurrency rules (increase / decrease / maintain)</li>
+ *   <li>Boundary conditions for each concurrency rule</li>
+ *   <li>All four heap-sizing rules</li>
+ *   <li>Null / empty input validation</li>
+ *   <li>Decision structure completeness</li>
+ * </ul>
+ *
  * @author Sibasis Padhi
  * @version 1.0
  * @since 2025
  */
 class SimpleAgentTest {
 
-    private SimpleAgent simpleAgent;
-    private static final double TARGET_LATENCY = 100.0;
-    private static final double LOW_THRESHOLD = TARGET_LATENCY * 0.7; // 70ms
+    private SimpleAgent agent;
+
+    // Mirror the defaults from application.yml so tests are self-consistent
+    private static final double TARGET_LATENCY         = 100.0;
+    private static final double LOW_THRESHOLD_FACTOR   = 0.7;
+    private static final double SCALE_UP_FACTOR        = 1.5;
+    private static final double SCALE_DOWN_FACTOR      = 0.75;
+    private static final double GC_FREQ_HIGH           = 1.0;
+    private static final double USAGE_HIGH             = 80.0;
+    private static final double GC_PAUSE_HIGH          = 100.0;
+    private static final double USAGE_MEDIUM           = 70.0;
+    private static final double GC_FREQ_LOW            = 0.5;
+    private static final double USAGE_LOW              = 50.0;
+    private static final double HEAP_SCALE_UP_LARGE    = 1.5;
+    private static final double HEAP_SCALE_UP_SMALL    = 1.25;
+    private static final double HEAP_SCALE_DOWN        = 0.75;
+    private static final int    HEAP_MIN_MB            = 256;
 
     @TempDir
     Path tempDir;
 
     @BeforeEach
     void setUp() {
-        simpleAgent = new SimpleAgent();
-        // Use reflection to set private fields for testing
-        setPrivateField(simpleAgent, "targetLatencyMs", TARGET_LATENCY);
-        setPrivateField(simpleAgent, "artifactsDir", tempDir.toString());
+        agent = new SimpleAgent();
+        setField("targetLatencyMs",         TARGET_LATENCY);
+        setField("artifactsDir",            tempDir.toString());
+        setField("lowThresholdFactor",      LOW_THRESHOLD_FACTOR);
+        setField("concurrencyScaleUpFactor",   SCALE_UP_FACTOR);
+        setField("concurrencyScaleDownFactor", SCALE_DOWN_FACTOR);
+        setField("heapGcFreqHighPerSec",    GC_FREQ_HIGH);
+        setField("heapUsageHighPercent",    USAGE_HIGH);
+        setField("heapGcPauseHighMs",       GC_PAUSE_HIGH);
+        setField("heapUsageMediumPercent",  USAGE_MEDIUM);
+        setField("heapGcFreqLowPerSec",     GC_FREQ_LOW);
+        setField("heapUsageLowPercent",     USAGE_LOW);
+        setField("heapScaleUpLargeFactor",  HEAP_SCALE_UP_LARGE);
+        setField("heapScaleUpSmallFactor",  HEAP_SCALE_UP_SMALL);
+        setField("heapScaleDownFactor",     HEAP_SCALE_DOWN);
+        setField("heapMinMb",               HEAP_MIN_MB);
     }
 
-    /**
-     * Test: High latency should trigger INCREASE in concurrency
-     * Rule: median latency > target → increase concurrency
-     */
+    // =========================================================================
+    // Concurrency rule tests  (decide)
+    // =========================================================================
+
     @Test
     void testHighLatencyIncreaseConcurrency() {
-        // Given: Metrics with high latency (150ms > 100ms target)
-        List<MetricRow> metrics = createMetrics(150.0, 10);
-        int currentConcurrency = 4;
+        // 150ms > 100ms target  →  4 * 1.5 = 6
+        AgentDecision d = agent.decide(metrics(150.0, 10), 4);
 
-        // When: Agent makes decision
-        AgentDecision decision = simpleAgent.decide(metrics, currentConcurrency);
-
-        // Then: Should recommend INCREASE
-        assertNotNull(decision);
-        assertEquals(AgentStrategy.RULE_BASED, decision.getStrategy());
-        assertTrue(decision.getRecommendation().toLowerCase().contains("6"),
-                "Should increase concurrency from 4 to 6");
-        assertTrue(decision.getReasoning().toLowerCase().contains("increas"),
-                "Reasoning should mention increase");
-        assertTrue(decision.getReasoning().toLowerCase().contains("exceeds"),
-                "Reasoning should mention exceeding target");
-        assertEquals(0.95, decision.getConfidenceScore(), 0.01);
-        assertNotNull(decision.getActionItems());
-        assertFalse(decision.getActionItems().isEmpty());
+        assertNotNull(d);
+        assertEquals(AgentStrategy.RULE_BASED, d.getStrategy());
+        assertTrue(d.getRecommendation().toLowerCase().contains("6"),
+                "Should increase concurrency to 6");
+        assertTrue(d.getReasoning().toLowerCase().contains("increas"));
+        assertTrue(d.getReasoning().toLowerCase().contains("exceeds"));
+        assertEquals(0.95, d.getConfidenceScore(), 0.01);
+        assertFalse(d.getActionItems().isEmpty());
     }
 
-    /**
-     * Test: Low latency should trigger DECREASE in concurrency
-     * Rule: median latency < 0.7 * target → decrease concurrency
-     */
     @Test
     void testLowLatencyDecreaseConcurrency() {
-        // Given: Metrics with low latency (50ms < 70ms threshold)
-        List<MetricRow> metrics = createMetrics(50.0, 10);
-        int currentConcurrency = 8;
+        // 50ms < 70ms threshold  →  8 * 0.75 = 6
+        AgentDecision d = agent.decide(metrics(50.0, 10), 8);
 
-        // When: Agent makes decision
-        AgentDecision decision = simpleAgent.decide(metrics, currentConcurrency);
-
-        // Then: Should recommend DECREASE
-        assertNotNull(decision);
-        assertEquals(AgentStrategy.RULE_BASED, decision.getStrategy());
-        assertTrue(decision.getRecommendation().toLowerCase().contains("6"),
-                "Should decrease concurrency from 8 to 6");
-        assertTrue(decision.getReasoning().toLowerCase().contains("decreas"),
-                "Reasoning should mention decrease");
-        assertTrue(decision.getReasoning().toLowerCase().contains("below"),
-                "Reasoning should mention being below target");
-        assertEquals(0.95, decision.getConfidenceScore(), 0.01);
-        assertEquals(AgentDecision.ImpactLevel.LOW, decision.getImpactLevel());
+        assertNotNull(d);
+        assertTrue(d.getRecommendation().toLowerCase().contains("6"),
+                "Should decrease concurrency to 6");
+        assertTrue(d.getReasoning().toLowerCase().contains("decreas"));
+        assertTrue(d.getReasoning().toLowerCase().contains("below"));
+        assertEquals(AgentDecision.ImpactLevel.LOW, d.getImpactLevel());
     }
 
-    /**
-     * Test: Latency within acceptable range should MAINTAIN concurrency
-     * Rule: 0.7 * target <= median <= target → maintain
-     */
     @Test
     void testAcceptableLatencyMaintainConcurrency() {
-        // Given: Metrics with acceptable latency (85ms, within 70-100ms range)
-        List<MetricRow> metrics = createMetrics(85.0, 10);
-        int currentConcurrency = 4;
+        // 85ms is in [70ms, 100ms] range  →  keep 4
+        AgentDecision d = agent.decide(metrics(85.0, 10), 4);
 
-        // When: Agent makes decision
-        AgentDecision decision = simpleAgent.decide(metrics, currentConcurrency);
-
-        // Then: Should recommend MAINTAIN
-        assertNotNull(decision);
-        assertEquals(AgentStrategy.RULE_BASED, decision.getStrategy());
-        assertTrue(decision.getRecommendation().toLowerCase().contains("4"),
-                "Should maintain concurrency at 4");
-        assertTrue(decision.getReasoning().toLowerCase().contains("maintain") ||
-                        decision.getReasoning().toLowerCase().contains("within"),
-                "Reasoning should mention maintaining or being within range");
-        assertEquals(0.95, decision.getConfidenceScore(), 0.01);
-        assertEquals(AgentDecision.ImpactLevel.LOW, decision.getImpactLevel());
+        assertNotNull(d);
+        assertTrue(d.getRecommendation().toLowerCase().contains("4"));
+        assertTrue(d.getReasoning().toLowerCase().contains("maintain")
+                || d.getReasoning().toLowerCase().contains("within"));
+        assertEquals(AgentDecision.ImpactLevel.LOW, d.getImpactLevel());
     }
 
-    /**
-     * Test: Edge case at exact target latency
-     */
     @Test
     void testExactTargetLatency() {
-        // Given: Metrics exactly at target (100ms)
-        List<MetricRow> metrics = createMetrics(100.0, 10);
-        int currentConcurrency = 4;
-
-        // When: Agent makes decision
-        AgentDecision decision = simpleAgent.decide(metrics, currentConcurrency);
-
-        // Then: Should maintain (not exceeding target)
-        assertNotNull(decision);
-        assertTrue(decision.getRecommendation().toLowerCase().contains("4"),
-                "Should maintain at exact target");
+        // exactly 100ms  →  within range, maintain
+        AgentDecision d = agent.decide(metrics(100.0, 10), 4);
+        assertTrue(d.getRecommendation().toLowerCase().contains("4"));
     }
 
-    /**
-     * Test: Edge case at low threshold boundary
-     */
     @Test
     void testLowThresholdBoundary() {
-        // Given: Metrics exactly at low threshold (70ms)
-        List<MetricRow> metrics = createMetrics(70.0, 10);
-        int currentConcurrency = 4;
-
-        // When: Agent makes decision
-        AgentDecision decision = simpleAgent.decide(metrics, currentConcurrency);
-
-        // Then: Should maintain (at boundary, not below)
-        assertNotNull(decision);
-        assertTrue(decision.getRecommendation().toLowerCase().contains("4"),
-                "Should maintain at threshold boundary");
+        // exactly 70ms (= target × 0.7)  →  NOT below threshold, maintain
+        AgentDecision d = agent.decide(metrics(70.0, 10), 4);
+        assertTrue(d.getRecommendation().toLowerCase().contains("4"),
+                "At exact boundary should maintain");
     }
 
-    /**
-     * Test: Very high latency triggers larger increase
-     */
     @Test
     void testVeryHighLatency() {
-        // Given: Metrics with very high latency (200ms)
-        List<MetricRow> metrics = createMetrics(200.0, 10);
-        int currentConcurrency = 4;
-
-        // When: Agent makes decision
-        AgentDecision decision = simpleAgent.decide(metrics, currentConcurrency);
-
-        // Then: Should increase significantly (4 * 1.5 = 6)
-        assertNotNull(decision);
-        assertTrue(decision.getRecommendation().toLowerCase().contains("6"),
-                "Should increase concurrency");
-        assertEquals(AgentDecision.ImpactLevel.MEDIUM, decision.getImpactLevel());
+        // 200ms  →  4 * 1.5 = 6, MEDIUM impact
+        AgentDecision d = agent.decide(metrics(200.0, 10), 4);
+        assertTrue(d.getRecommendation().toLowerCase().contains("6"));
+        assertEquals(AgentDecision.ImpactLevel.MEDIUM, d.getImpactLevel());
     }
 
-    /**
-     * Test: Very low latency triggers decrease
-     */
     @Test
     void testVeryLowLatency() {
-        // Given: Metrics with very low latency (20ms)
-        List<MetricRow> metrics = createMetrics(20.0, 10);
-        int currentConcurrency = 8;
-
-        // When: Agent makes decision
-        AgentDecision decision = simpleAgent.decide(metrics, currentConcurrency);
-
-        // Then: Should decrease (8 * 0.75 = 6)
-        assertNotNull(decision);
-        assertTrue(decision.getRecommendation().toLowerCase().contains("6"),
-                "Should decrease concurrency");
+        // 20ms  →  8 * 0.75 = 6
+        AgentDecision d = agent.decide(metrics(20.0, 10), 8);
+        assertTrue(d.getRecommendation().toLowerCase().contains("6"));
     }
 
-    /**
-     * Test: Minimum concurrency floor (should not go below 1)
-     */
     @Test
     void testMinimumConcurrencyFloor() {
-        // Given: Very low latency with concurrency of 1
-        List<MetricRow> metrics = createMetrics(20.0, 10);
-        int currentConcurrency = 1;
-
-        // When: Agent makes decision
-        AgentDecision decision = simpleAgent.decide(metrics, currentConcurrency);
-
-        // Then: Should maintain at 1 (floor)
-        assertNotNull(decision);
-        String recommendation = decision.getRecommendation().toLowerCase();
-        // Should stay at 1 (0.75 * 1 = 0.75, floored to 1)
-        assertTrue(recommendation.contains("1"), "Should not go below 1");
+        // concurrency 1 with low latency  →  must stay at 1 (floor)
+        AgentDecision d = agent.decide(metrics(20.0, 10), 1);
+        assertTrue(d.getRecommendation().toLowerCase().contains("1"),
+                "Should not go below 1");
     }
 
-    /**
-     * Test: Decision contains required fields
-     */
     @Test
     void testDecisionStructure() {
-        // Given: Any metrics
-        List<MetricRow> metrics = createMetrics(150.0, 10);
-        int currentConcurrency = 4;
+        AgentDecision d = agent.decide(metrics(150.0, 10), 4);
 
-        // When: Agent makes decision
-        AgentDecision decision = simpleAgent.decide(metrics, currentConcurrency);
-
-        // Then: Should have all required fields
-        assertNotNull(decision.getDecisionId());
-        assertNotNull(decision.getTimestamp());
-        assertEquals("concurrency-pool", decision.getResourceId());
-        assertEquals("ExecutorService", decision.getResourceType());
-        assertEquals(AgentStrategy.RULE_BASED, decision.getStrategy());
-        assertNotNull(decision.getRecommendation());
-        assertNotNull(decision.getReasoning());
-        assertNotNull(decision.getConfidenceScore());
-        assertTrue(decision.getConfidenceScore() >= 0.0 && decision.getConfidenceScore() <= 1.0);
-        assertNotNull(decision.getImpactLevel());
-        assertNotNull(decision.getActionItems());
-        assertTrue(decision.getActionItems().size() >= 2);
-        assertNotNull(decision.getMetricsAnalyzed());
-        assertTrue(decision.getMetricsAnalyzed().contains("latencyMs"));
+        assertNotNull(d.getDecisionId());
+        assertNotNull(d.getTimestamp());
+        assertEquals("concurrency-pool", d.getResourceId());
+        assertEquals("ExecutorService", d.getResourceType());
+        assertEquals(AgentStrategy.RULE_BASED, d.getStrategy());
+        assertNotNull(d.getRecommendation());
+        assertNotNull(d.getReasoning());
+        assertTrue(d.getConfidenceScore() >= 0.0 && d.getConfidenceScore() <= 1.0);
+        assertNotNull(d.getImpactLevel());
+        assertTrue(d.getActionItems().size() >= 2);
+        assertTrue(d.getMetricsAnalyzed().contains("latencyMs"));
     }
 
-    /**
-     * Test: Empty metrics list throws exception
-     */
     @Test
     void testEmptyMetricsThrowsException() {
-        // Given: Empty metrics list
-        List<MetricRow> metrics = new ArrayList<>();
-        int currentConcurrency = 4;
-
-        // When/Then: Should throw exception
-        assertThrows(IllegalArgumentException.class, () -> {
-            simpleAgent.decide(metrics, currentConcurrency);
-        });
+        assertThrows(IllegalArgumentException.class,
+                () -> agent.decide(new ArrayList<>(), 4));
     }
 
-    /**
-     * Test: Null metrics list throws exception
-     */
     @Test
     void testNullMetricsThrowsException() {
-        // Given: Null metrics
-        int currentConcurrency = 4;
-
-        // When/Then: Should throw exception (either IllegalArgumentException or NullPointerException)
-        assertThrows(Exception.class, () -> {
-            simpleAgent.decide(null, currentConcurrency);
-        });
+        assertThrows(Exception.class,
+                () -> agent.decide(null, 4));
     }
 
-    /**
-     * Test: Mixed latency values uses median correctly
-     */
     @Test
     void testMedianCalculation() {
-        // Given: Metrics with varied latencies [50, 100, 150, 200, 250]
-        // Median should be 150
-        List<MetricRow> metrics = new ArrayList<>();
-        double[] latencies = {50.0, 100.0, 150.0, 200.0, 250.0};
-        for (double latency : latencies) {
-            metrics.add(createMetric(latency));
+        // Latencies: [50, 100, 150, 200, 250]  →  median = 150ms  →  exceed target
+        List<MetricRow> mixed = new ArrayList<>();
+        for (double l : new double[]{50.0, 100.0, 150.0, 200.0, 250.0}) {
+            mixed.add(metric(l));
         }
-        int currentConcurrency = 4;
-
-        // When: Agent makes decision
-        AgentDecision decision = simpleAgent.decide(metrics, currentConcurrency);
-
-        // Then: Should use median (150ms) which exceeds target (100ms)
-        // So should increase concurrency
-        assertNotNull(decision);
-        assertTrue(decision.getReasoning().toLowerCase().contains("increase") ||
-                        decision.getReasoning().toLowerCase().contains("exceeds"),
-                "Should recognize median exceeds target");
+        AgentDecision d = agent.decide(mixed, 4);
+        assertTrue(d.getReasoning().toLowerCase().contains("increase")
+                || d.getReasoning().toLowerCase().contains("exceeds"));
     }
 
-    /**
-     * Test: Confidence score is always 0.95 for rule-based agent
-     */
     @Test
     void testConfidenceScoreConsistency() {
-        // Test all three scenarios
-        List<MetricRow> highLatency = createMetrics(150.0, 10);
-        List<MetricRow> lowLatency = createMetrics(50.0, 10);
-        List<MetricRow> normalLatency = createMetrics(85.0, 10);
+        AgentDecision d1 = agent.decide(metrics(150.0, 10), 4);
+        AgentDecision d2 = agent.decide(metrics(50.0, 10), 8);
+        AgentDecision d3 = agent.decide(metrics(85.0, 10), 4);
 
-        AgentDecision decision1 = simpleAgent.decide(highLatency, 4);
-        AgentDecision decision2 = simpleAgent.decide(lowLatency, 8);
-        AgentDecision decision3 = simpleAgent.decide(normalLatency, 4);
-
-        // All should have same high confidence (deterministic rules)
-        assertEquals(0.95, decision1.getConfidenceScore(), 0.01);
-        assertEquals(0.95, decision2.getConfidenceScore(), 0.01);
-        assertEquals(0.95, decision3.getConfidenceScore(), 0.01);
+        assertEquals(0.95, d1.getConfidenceScore(), 0.01);
+        assertEquals(0.95, d2.getConfidenceScore(), 0.01);
+        assertEquals(0.95, d3.getConfidenceScore(), 0.01);
     }
 
-    // Helper methods
+    // =========================================================================
+    // Heap analysis tests  (decideWithHeapAnalysis)
+    // =========================================================================
 
-    /**
-     * Creates a list of metrics with specified latency.
-     */
-    private List<MetricRow> createMetrics(double latencyMs, int count) {
-        List<MetricRow> metrics = new ArrayList<>();
-        for (int i = 0; i < count; i++) {
-            metrics.add(createMetric(latencyMs));
-        }
-        return metrics;
+    @Test
+    void testHeapRule1_HighGcFreqAndHighUsage_ScalesUpLarge() {
+        // GC freq 1.5/sec (> 1.0) AND heap usage 85% (> 80%)  →  heap * 1.5
+        RunResult baseline = baselineResult(150.0, 512, 85.0, 1.5, 50.0);
+        AgentDecision d = agent.decideWithHeapAnalysis(baseline, 4);
+
+        assertNotNull(d.getRecommendedHeapSizeMb());
+        assertEquals((int) Math.ceil(512 * HEAP_SCALE_UP_LARGE),
+                d.getRecommendedHeapSizeMb());
+        assertTrue(d.getReasoning().toLowerCase().contains("gc frequency"));
+        assertTrue(d.getReasoning().toLowerCase().contains("increasing heap"));
+        assertEquals(AgentDecision.ImpactLevel.MEDIUM, d.getImpactLevel());
+        assertTrue(d.getMetricsAnalyzed().contains("heapMetrics"));
     }
 
-    /**
-     * Creates a single metric with specified latency.
-     */
-    private MetricRow createMetric(double latencyMs) {
+    @Test
+    void testHeapRule2_HighGcPauseAndMediumUsage_ScalesUpSmall() {
+        // GC pause 150ms (> 100ms) AND heap usage 75% (> 70%)  →  heap * 1.25
+        // GC freq 0.6 so Rule 1 does NOT trigger
+        RunResult baseline = baselineResult(150.0, 512, 75.0, 0.6, 150.0);
+        AgentDecision d = agent.decideWithHeapAnalysis(baseline, 4);
+
+        assertNotNull(d.getRecommendedHeapSizeMb());
+        assertEquals((int) Math.ceil(512 * HEAP_SCALE_UP_SMALL),
+                d.getRecommendedHeapSizeMb());
+        assertTrue(d.getReasoning().toLowerCase().contains("gc pause time"));
+        assertTrue(d.getReasoning().toLowerCase().contains("increasing heap"));
+        assertEquals(AgentDecision.ImpactLevel.MEDIUM, d.getImpactLevel());
+    }
+
+    @Test
+    void testHeapRule3_LowGcFreqAndLowUsage_ScalesDown() {
+        // GC freq 0.3/sec (< 0.5) AND heap usage 30% (< 50%)  →  heap * 0.75, floored at 256MB
+        RunResult baseline = baselineResult(85.0, 1024, 30.0, 0.3, 20.0);
+        AgentDecision d = agent.decideWithHeapAnalysis(baseline, 4);
+
+        assertNotNull(d.getRecommendedHeapSizeMb());
+        int expected = (int) Math.max(HEAP_MIN_MB, Math.floor(1024 * HEAP_SCALE_DOWN));
+        assertEquals(expected, d.getRecommendedHeapSizeMb());
+        assertTrue(d.getReasoning().toLowerCase().contains("over-provisioning"));
+        assertTrue(d.getReasoning().toLowerCase().contains("decreasing heap"));
+    }
+
+    @Test
+    void testHeapRule3_MinFloorEnforced() {
+        // Tiny heap (200MB) + low GC  →  0.75 * 200 = 150, but floor is 256MB
+        RunResult baseline = baselineResult(85.0, 200, 20.0, 0.2, 10.0);
+        AgentDecision d = agent.decideWithHeapAnalysis(baseline, 4);
+
+        assertNotNull(d.getRecommendedHeapSizeMb());
+        assertEquals(HEAP_MIN_MB, d.getRecommendedHeapSizeMb(),
+                "Floor of " + HEAP_MIN_MB + "MB must be respected");
+    }
+
+    @Test
+    void testHeapOptimal_NoChange() {
+        // GC freq 0.7 (between 0.5 and 1.0), heap 60% (between 50% and 80%)  →  maintain
+        RunResult baseline = baselineResult(85.0, 512, 60.0, 0.7, 40.0);
+        AgentDecision d = agent.decideWithHeapAnalysis(baseline, 4);
+
+        assertNotNull(d.getRecommendedHeapSizeMb());
+        assertEquals(512, d.getRecommendedHeapSizeMb(),
+                "Optimal heap should be unchanged");
+        assertTrue(d.getReasoning().toLowerCase().contains("maintaining heap"));
+    }
+
+    @Test
+    void testDecideWithHeapAnalysis_NoHeapMetrics() {
+        // Null heap metrics  →  decision still made, no heap recommendation
+        RunResult baseline = RunResult.builder()
+                .concurrency(4)
+                .medianLatencyMs(150.0)
+                .build();
+        AgentDecision d = agent.decideWithHeapAnalysis(baseline, 4);
+
+        assertNotNull(d);
+        assertNull(d.getRecommendedHeapSizeMb(),
+                "No heap recommendation when metrics are absent");
+        assertFalse(d.getMetricsAnalyzed().contains("heapMetrics"));
+    }
+
+    @Test
+    void testDecideWithHeapAnalysis_NullBaseline() {
+        assertThrows(IllegalArgumentException.class,
+                () -> agent.decideWithHeapAnalysis(null, 4));
+    }
+
+    @Test
+    void testDecideWithHeapAnalysis_ConcurrencyAndHeapBothRecommended() {
+        // High latency AND high GC pressure  →  both concurrency AND heap change
+        RunResult baseline = baselineResult(150.0, 512, 85.0, 1.5, 50.0);
+        AgentDecision d = agent.decideWithHeapAnalysis(baseline, 4);
+
+        // Concurrency increased
+        assertTrue(d.getRecommendation().toLowerCase().contains("6"));
+        // Heap also updated
+        assertNotNull(d.getRecommendedHeapSizeMb());
+        // Both action items present
+        assertTrue(d.getActionItems().size() >= 2);
+        assertTrue(d.getMetricsAnalyzed().contains("latencyMs"));
+        assertTrue(d.getMetricsAnalyzed().contains("heapMetrics"));
+    }
+
+    // =========================================================================
+    // Helpers
+    // =========================================================================
+
+    private List<MetricRow> metrics(double latencyMs, int count) {
+        List<MetricRow> list = new ArrayList<>();
+        for (int i = 0; i < count; i++) list.add(metric(latencyMs));
+        return list;
+    }
+
+    private MetricRow metric(double latencyMs) {
         return MetricRow.builder()
                 .resourceId("test-resource")
                 .resourceType("TestService")
@@ -344,15 +334,41 @@ class SimpleAgentTest {
     }
 
     /**
-     * Sets a private field using reflection (for testing purposes).
+     * Creates a RunResult with embedded HeapMetrics for heap rule tests.
+     *
+     * @param medianLatency   latency in ms
+     * @param heapSizeMb      current heap size in MB
+     * @param heapUsagePct    heap usage %
+     * @param gcFreqPerSec    GC events per second
+     * @param gcPauseAvgMs    average GC pause in ms
      */
-    private void setPrivateField(Object target, String fieldName, Object value) {
+    private RunResult baselineResult(double medianLatency, long heapSizeMb,
+                                     double heapUsagePct, double gcFreqPerSec,
+                                     double gcPauseAvgMs) {
+        HeapMetrics hm = HeapMetrics.builder()
+                .heapSizeMb(heapSizeMb)
+                .heapUsedMb((long) (heapSizeMb * heapUsagePct / 100))
+                .heapUsagePercent(heapUsagePct)
+                .gcFrequencyPerSec(gcFreqPerSec)
+                .gcPauseTimeAvgMs(gcPauseAvgMs)
+                .gcCount(100)
+                .gcTimeMs((long) (gcPauseAvgMs * 100))
+                .build();
+        return RunResult.builder()
+                .concurrency(4)
+                .medianLatencyMs(medianLatency)
+                .heapMetrics(hm)
+                .build();
+    }
+
+    /** Injects a value into a private field via reflection. */
+    private void setField(String name, Object value) {
         try {
-            java.lang.reflect.Field field = target.getClass().getDeclaredField(fieldName);
-            field.setAccessible(true);
-            field.set(target, value);
+            java.lang.reflect.Field f = SimpleAgent.class.getDeclaredField(name);
+            f.setAccessible(true);
+            f.set(agent, value);
         } catch (Exception e) {
-            throw new RuntimeException("Failed to set field: " + fieldName, e);
+            throw new RuntimeException("Failed to set field: " + name, e);
         }
     }
 }

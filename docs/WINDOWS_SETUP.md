@@ -140,17 +140,19 @@ java -Dagent.strategy=simple -jar target\\agent-cloud-optimizer-0.2.0.jar
 ### **Step 5: View Results**
 
 ```powershell
-# Option 1: Start local web server
-python -m http.server 8000
-# Open browser: http://localhost:8000/demo.html
+# Option 1: Open the app pages directly
+# Live dashboard:
+#   http://localhost:8081/live-dashboard.html
+# Results page:
+#   http://localhost:8081/results.html
 
 # Option 2: Check JSON files
 dir artifacts
 type artifacts\report.json
 
-# Option 3: View reasoning traces
-type artifacts\reasoning_trace_llm.txt
-type artifacts\reasoning_trace_rule.txt
+# Option 3: Inspect artifact outputs
+# (filenames may vary by run depending on strategy and phase)
+dir artifacts
 ```
 
 ---
@@ -171,10 +173,11 @@ C:\Users\YourName\Documents\agent-cloud-optimizer\
 │   ├── baseline.json
 │   ├── after.json
 │   ├── report.json
-│   ├── reasoning_trace_llm.txt
-│   └── reasoning_trace_rule.txt
+│   ├── optimization artifacts
+│   ├── reasoning traces
+│   └── validation / rollback records
 │
-└── demo.html
+└── docs\
 ```
 
 ---
@@ -332,21 +335,15 @@ Set-ExecutionPolicy RemoteSigned -Scope CurrentUser
 java -jar target\agent-cloud-optimizer-0.2.0.jar
 ```
 
-### **Issue 6: Python Not Found (for demo.html)**
+### **Issue 6: Python Not Found**
 
-**Problem**: Can't start HTTP server
+**Problem**: You tried to use a local static file server, but you do not actually need one for normal ACO usage.
 
 **Solution**:
 ```powershell
-# Install Python from Microsoft Store
-winget install Python.Python.3.12
-
-# OR use Node.js http-server
-npm install -g http-server
-http-server -p 8000
-
-# OR just open demo.html directly (may have CORS issues)
-start demo.html
+# Just run the app and open:
+# http://localhost:8081/live-dashboard.html
+# http://localhost:8081/results.html
 ```
 
 ---
@@ -474,7 +471,8 @@ wsl
 - [x] .bat scripts provided ✅
 - [x] File paths use backslashes ✅
 - [x] Environment variables work ✅
-- [x] demo.html works in browser ✅
+- [x] Live dashboard works in browser ✅
+- [x] Results page works in browser ✅
 - [x] No Unix-specific dependencies ✅
 - [x] Windows Terminal support ✅
 - [x] PowerShell support ✅
