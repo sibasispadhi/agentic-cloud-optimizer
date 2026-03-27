@@ -53,6 +53,88 @@ The point is not raw automation. The point is **bounded, explainable optimizatio
 
 ---
 
+## Architecture
+
+### Execution Pipeline
+
+Every optimization cycle flows through a fixed governance pipeline. No step can be skipped.
+
+```mermaid
+flowchart TD
+    WS["Workload Simulator\nHttpRestWorkloadSimulator"] --> MC
+    MC["Metrics Collection\nGcMetricsCollector · MetricsLogger"] --> SLO
+    SLO{"SLO Breach?\nSloBreachDetector"}
+    SLO -->|"no breach"| WS
+    SLO -->|"breach detected"| AR
+    AR["Agent Reasoning\nSpringAiLlmAgent · SimpleAgent"] --> PA
+    PA["Plan Assembly\nPlanAssembler → OptimizationPlan\n(PlanChange · PlanEvidence · RollbackRecipe)"] --> PE
+    PE["Policy Evaluation\nDefaultPolicyEngine"] --> AB
+    AB["Actuation Budget\nActuationBudgetLedger"] --> AG
+    AG{"Autonomy Gate\nAutonomyGate"}
+    AG -->|"OBSERVE / ADVISORY"| ADV["Advisory output\nrecommendation only"]
+    AG -->|"AUTO_GOVERNED"| VE
+    AG -->|"DENIED"| RE
+    VE["Validation\nValidationExecutor"] -->|"passed"| AUD
+    VE -->|"failed"| RE
+    RE["Rollback\nRollbackExecutor"] --> AUD
+    ADV --> AUD
+    AUD["Audit & Report\nPlanWriter · ReportGenerator"]
+```
+
+### Component Layers
+
+ACO is organized into six layers. Each layer has a single responsibility and depends only on the layers below it.
+
+```mermaid
+graph TB
+    subgraph INFRA["Infrastructure"]
+        OL["Ollama / Local LLM"]
+        LR["LoadRunner"]
+        SIM["HttpRestWorkloadSimulator"]
+    end
+
+    subgraph OBS["Observation"]
+        GMC["GcMetricsCollector"]
+        SBD["SloBreachDetector"]
+        ML["MetricsLogger"]
+    end
+
+    subgraph REASON["Reasoning"]
+        LLMA["SpringAiLlmAgent"]
+        SA["SimpleAgent"]
+        LPB["LlmPromptBuilder"]
+        LRP["LlmResponseParser"]
+    end
+
+    subgraph PLAN["Planning"]
+        PA2["PlanAssembler"]
+        OP["OptimizationPlan"]
+        PCE["PlanChange · PlanEvidence"]
+        VRR["ValidationRecipe · RollbackRecipe"]
+    end
+
+    subgraph GOV["Governance"]
+        PE2["DefaultPolicyEngine"]
+        ABL["ActuationBudgetLedger"]
+        AG2["AutonomyGate"]
+    end
+
+    subgraph AUDIT2["Validation & Audit"]
+        VE2["ValidationExecutor"]
+        RE2["RollbackExecutor"]
+        PW["PlanWriter"]
+        RG["ReportGenerator"]
+    end
+
+    INFRA --> OBS
+    OBS --> REASON
+    REASON --> PLAN
+    PLAN --> GOV
+    GOV --> AUDIT2
+```
+
+---
+
 ## Quick Start
 
 ### Option 1: Docker with local LLM
