@@ -44,10 +44,10 @@ ACO turns that into a more disciplined loop:
 
 1. **Observe** runtime behavior
 2. **Reason** about likely bottlenecks
-3. **Assemble** a structured optimization plan
+3. **Plan** a structured optimization with evidence and rollback path
 4. **Govern** that plan with policy, budgets, and autonomy checks
 5. **Validate** the outcome
-6. **Preserve** evidence for review and rollback
+6. **Audit** — preserve every decision for review and rollback
 
 The point is not raw automation. The point is **bounded, explainable optimization**.
 
@@ -140,35 +140,20 @@ For a more guided local setup, use **[docs/START_HERE.md](docs/START_HERE.md)**.
 
 ## Core Workflow
 
-When you run an optimization cycle, ACO performs a governance-first pipeline:
+The Architecture diagram above shows the full pipeline. Each stage maps to a layer:
 
-1. **Baseline run**
-   - execute workload
-   - collect latency, throughput, heap, CPU, GC, and thread signals
-
-2. **SLO check**
-   - determine whether configured thresholds are breached
-
-3. **Agent reasoning**
-   - use `SpringAiLlmAgent` or `SimpleAgent` to generate recommendations
-
-4. **Plan assembly**
-   - package changes, evidence, metadata, validation, and rollback into an `OptimizationPlan`
-
-5. **Policy evaluation**
-   - evaluate proposed changes through `PolicyEngine`
-
-6. **Budget check**
-   - consume from `ActuationBudgetLedger` before permitting change
-
-7. **Autonomy gate**
-   - decide advisory vs actuation behavior based on confidence and mode
-
-8. **Validation + rollback modeling**
-   - define validation criteria and recovery path
-
-9. **Artifact + report generation**
-   - persist outputs for audit and comparison
+| Pipeline stage | Layer | Detail |
+|---|---|---|
+| Workload Simulator | Infrastructure | executes load; drives metric signals |
+| Metrics Collection | Observation | latency, throughput, heap, CPU, GC, threads |
+| SLO Detector | Observation | triggers optimization when thresholds breach |
+| Agent Reasoning | Reasoning | `SpringAiLlmAgent` or `SimpleAgent` |
+| Plan Assembly | Planning | `OptimizationPlan` with evidence and rollback path |
+| Policy Evaluation | Governance | `PolicyEngine` approves, warns, or denies |
+| Actuation Budget | Governance | `ActuationBudgetLedger` enforces change limits |
+| Autonomy Gate | Governance | Advisory / Auto-Governed / Denied |
+| Validation | Validation & Audit | confirms improvement; triggers rollback if not |
+| Audit & Report | Validation & Audit | persists every decision for review |
 
 ---
 
