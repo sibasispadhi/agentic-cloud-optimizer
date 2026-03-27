@@ -61,24 +61,19 @@ Every optimization cycle flows through a fixed governance pipeline. No step can 
 
 ```mermaid
 flowchart TD
-    WS[Workload Simulator] --> MC
-    MC[Metrics Collection] --> SLO
-    SLO{SLO Breach?}
-    SLO -->|no breach| WS
-    SLO -->|breach detected| AR
-    AR[Agent Reasoning] --> PA
-    PA[Plan Assembly] --> PE
-    PE[Policy Evaluation] --> AB
-    AB[Actuation Budget] --> AG
-    AG{Autonomy Gate}
-    AG -->|OBSERVE / ADVISORY| ADV[Advisory only]
-    AG -->|AUTO_GOVERNED| VE
-    AG -->|DENIED| RE
-    VE[Validation] -->|passed| AUD
-    VE -->|failed| RE
-    RE[Rollback] --> AUD
+    WS[Workload Simulator] --> MC[Metrics Collection]
+    MC --> SLO[SLO Detector]
+    SLO --> AR[Agent Reasoning]
+    AR --> PA[Plan Assembly]
+    PA --> PE[Policy Evaluation]
+    PE --> AB[Actuation Budget]
+    AB --> AG{Autonomy Gate}
+    AG -->|Advisory| ADV[Advisory Report]
+    AG -->|Auto-Governed| VE[Validation]
+    AG -->|Denied| RE[Rollback]
+    VE --> AUD[Audit & Report]
+    RE --> AUD
     ADV --> AUD
-    AUD[Audit & Report]
 ```
 
 ### Component Layers
@@ -86,51 +81,15 @@ flowchart TD
 ACO is organized into six layers. Each layer has a single responsibility and depends only on the layers below it.
 
 ```mermaid
-graph TB
-    subgraph INFRA["Infrastructure"]
-        OL[Ollama / Local LLM]
-        LR[Load Runner]
-        SIM[Workload Simulator]
-    end
+flowchart TD
+    A["Infrastructure — Ollama · Load Runner · Workload Simulator"]
+    B["Observation — Metrics Collection · SLO Detection"]
+    C["Reasoning — LLM Agent · Simple Agent"]
+    D["Planning — Plan Assembler · Optimization Plan · Rollback Recipe"]
+    E["Governance — Policy Engine · Budget Ledger · Autonomy Gate"]
+    F["Validation & Audit — Validation · Rollback · Report"]
 
-    subgraph OBS["Observation"]
-        GMC[Metrics Collector]
-        SBD[SLO Breach Detector]
-        ML[Metrics Logger]
-    end
-
-    subgraph REASON["Reasoning"]
-        LLMA[LLM Agent]
-        SA[Simple Agent]
-        LPB[Prompt Builder]
-        LRP[Response Parser]
-    end
-
-    subgraph PLAN["Planning"]
-        PA2[Plan Assembler]
-        OP[Optimization Plan]
-        PCE[Plan Evidence]
-        VRR[Rollback Recipe]
-    end
-
-    subgraph GOV["Governance"]
-        PE2[Policy Engine]
-        ABL[Budget Ledger]
-        AG2[Autonomy Gate]
-    end
-
-    subgraph AUDIT2["Validation & Audit"]
-        VE2[Validation Executor]
-        RE2[Rollback Executor]
-        PW[Plan Writer]
-        RG[Report Generator]
-    end
-
-    INFRA --> OBS
-    OBS --> REASON
-    REASON --> PLAN
-    PLAN --> GOV
-    GOV --> AUDIT2
+    A --> B --> C --> D --> E --> F
 ```
 
 ---
