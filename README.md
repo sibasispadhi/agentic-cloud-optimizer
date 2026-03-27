@@ -13,8 +13,12 @@
 
 ## What ACO Is
 
-ACO is an open-source Java application for experimenting with **governed optimization** of JVM-backed services.
-It watches runtime signals such as latency, heap, GC, CPU, and thread behavior; produces structured
+ACO is an open-source Java **Autonomic Reliability Governance (ARG)** reference implementation for experimenting
+with governed optimization of JVM-backed services. ARG is the discipline of designing bounded, auditable,
+and reversible automation under explicit constraints — particularly where agents plan and act faster than
+human-in-the-loop validation can operate.
+
+ACO watches runtime signals such as latency, heap, GC, CPU, and thread behavior; produces structured
 optimization plans; evaluates those plans against policy and actuation budgets; and validates whether
 changes helped or hurt.
 
@@ -25,8 +29,10 @@ ACO currently supports:
 - **Deterministic fallback analysis** through `SimpleAgent`
 - **OptimizationPlan artifacts** for auditability
 - **Policy evaluation** before actuation
-- **Actuation budgets** for bounded change
-- **Confidence gates and autonomy modes**
+- **Actuation budgets** — rate-limiting change magnitude and frequency, not just traffic
+- **Blast radius constraints** through actuation scoping
+- **Confidence gates and progressive autonomy modes** (Advisory / Auto-Governed / Denied)
+- **Eligibility tiers** — action-based permission model separating observational, low-risk, and high-risk actions
 - **Validation and rollback modeling**
 - **Deterministic benchmark scenarios** for amplification testing
 
@@ -44,10 +50,10 @@ ACO turns that into a more disciplined loop:
 
 1. **Observe** runtime behavior
 2. **Reason** about likely bottlenecks
-3. **Assemble** a structured optimization plan
+3. **Plan** a structured optimization with evidence and rollback path
 4. **Govern** that plan with policy, budgets, and autonomy checks
 5. **Validate** the outcome
-6. **Preserve** evidence for review and rollback
+6. **Audit** — preserve every decision for review and rollback
 
 The point is not raw automation. The point is **bounded, explainable optimization**.
 
@@ -140,35 +146,20 @@ For a more guided local setup, use **[docs/START_HERE.md](docs/START_HERE.md)**.
 
 ## Core Workflow
 
-When you run an optimization cycle, ACO performs a governance-first pipeline:
+The Architecture diagram above shows the full pipeline. Each stage maps to a layer:
 
-1. **Baseline run**
-   - execute workload
-   - collect latency, throughput, heap, CPU, GC, and thread signals
-
-2. **SLO check**
-   - determine whether configured thresholds are breached
-
-3. **Agent reasoning**
-   - use `SpringAiLlmAgent` or `SimpleAgent` to generate recommendations
-
-4. **Plan assembly**
-   - package changes, evidence, metadata, validation, and rollback into an `OptimizationPlan`
-
-5. **Policy evaluation**
-   - evaluate proposed changes through `PolicyEngine`
-
-6. **Budget check**
-   - consume from `ActuationBudgetLedger` before permitting change
-
-7. **Autonomy gate**
-   - decide advisory vs actuation behavior based on confidence and mode
-
-8. **Validation + rollback modeling**
-   - define validation criteria and recovery path
-
-9. **Artifact + report generation**
-   - persist outputs for audit and comparison
+| Pipeline stage | Layer | Detail |
+|---|---|---|
+| Workload Simulator | Infrastructure | executes load; drives metric signals |
+| Metrics Collection | Observation | latency, throughput, heap, CPU, GC, threads |
+| SLO Detector | Observation | triggers optimization when Service Level Objective (SLO) thresholds breach |
+| Agent Reasoning | Reasoning | `SpringAiLlmAgent` or `SimpleAgent` |
+| Plan Assembly | Planning | `OptimizationPlan` with evidence and rollback path |
+| Policy Evaluation | Governance | `PolicyEngine` approves, warns, or denies |
+| Actuation Budget | Governance | `ActuationBudgetLedger` enforces change limits |
+| Autonomy Gate | Governance | Advisory / Auto-Governed / Denied |
+| Validation | Validation & Audit | confirms improvement; triggers rollback if not |
+| Audit & Report | Validation & Audit | persists every decision for review |
 
 ---
 
@@ -244,7 +235,7 @@ production data.
 Example outcomes from the benchmark layer:
 - **Retry storm**: 3× amplification factor
 - **Naive latency-reactive agent**: p99 worsened by **58%**
-- **Governed agent**: p99 recovered by **75%**
+- **Governed agent**: p99 recovered by **75%** (480 ms → 120 ms); throughput restored from 40 RPS to 78 RPS
 
 That is the whole point of the project: useful automation should dampen instability, not cosplay as a chaos monkey.
 
