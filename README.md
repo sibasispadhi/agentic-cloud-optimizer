@@ -53,6 +53,47 @@ The point is not raw automation. The point is **bounded, explainable optimizatio
 
 ---
 
+## Architecture
+
+### Execution Pipeline
+
+Every optimization cycle flows through a fixed governance pipeline. No step can be skipped.
+
+```mermaid
+flowchart TD
+    WS[Workload Simulator] --> MC[Metrics Collection]
+    MC --> SLO[SLO Detector]
+    SLO --> AR[Agent Reasoning]
+    AR --> PA[Plan Assembly]
+    PA --> PE[Policy Evaluation]
+    PE --> AB[Actuation Budget]
+    AB --> AG{Autonomy Gate}
+    AG -->|Advisory| ADV[Advisory Report]
+    AG -->|Auto-Governed| VE[Validation]
+    AG -->|Denied| RE[Rollback]
+    VE --> AUD[Audit & Report]
+    RE --> AUD
+    ADV --> AUD
+```
+
+### Component Layers
+
+ACO is organized into six layers. Each layer has a single responsibility and depends only on the layers below it.
+
+```mermaid
+flowchart TD
+    A["Infrastructure — Ollama · Load Runner · Workload Simulator"]
+    B["Observation — Metrics Collection · SLO Detection"]
+    C["Reasoning — LLM Agent · Simple Agent"]
+    D["Planning — Plan Assembler · Optimization Plan · Rollback Recipe"]
+    E["Governance — Policy Engine · Budget Ledger · Autonomy Gate"]
+    F["Validation & Audit — Validation · Rollback · Report"]
+
+    A --> B --> C --> D --> E --> F
+```
+
+---
+
 ## Quick Start
 
 ### Option 1: Docker with local LLM
