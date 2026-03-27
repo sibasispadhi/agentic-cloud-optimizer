@@ -61,24 +61,24 @@ Every optimization cycle flows through a fixed governance pipeline. No step can 
 
 ```mermaid
 flowchart TD
-    WS["Workload Simulator\nHttpRestWorkloadSimulator"] --> MC
-    MC["Metrics Collection\nGcMetricsCollector · MetricsLogger"] --> SLO
-    SLO{"SLO Breach?\nSloBreachDetector"}
-    SLO -->|"no breach"| WS
-    SLO -->|"breach detected"| AR
-    AR["Agent Reasoning\nSpringAiLlmAgent · SimpleAgent"] --> PA
-    PA["Plan Assembly\nPlanAssembler → OptimizationPlan\n(PlanChange · PlanEvidence · RollbackRecipe)"] --> PE
-    PE["Policy Evaluation\nDefaultPolicyEngine"] --> AB
-    AB["Actuation Budget\nActuationBudgetLedger"] --> AG
-    AG{"Autonomy Gate\nAutonomyGate"}
-    AG -->|"OBSERVE / ADVISORY"| ADV["Advisory output\nrecommendation only"]
-    AG -->|"AUTO_GOVERNED"| VE
-    AG -->|"DENIED"| RE
-    VE["Validation\nValidationExecutor"] -->|"passed"| AUD
-    VE -->|"failed"| RE
-    RE["Rollback\nRollbackExecutor"] --> AUD
+    WS[Workload Simulator] --> MC
+    MC[Metrics Collection] --> SLO
+    SLO{SLO Breach?}
+    SLO -->|no breach| WS
+    SLO -->|breach detected| AR
+    AR[Agent Reasoning] --> PA
+    PA[Plan Assembly] --> PE
+    PE[Policy Evaluation] --> AB
+    AB[Actuation Budget] --> AG
+    AG{Autonomy Gate}
+    AG -->|OBSERVE / ADVISORY| ADV[Advisory only]
+    AG -->|AUTO_GOVERNED| VE
+    AG -->|DENIED| RE
+    VE[Validation] -->|passed| AUD
+    VE -->|failed| RE
+    RE[Rollback] --> AUD
     ADV --> AUD
-    AUD["Audit & Report\nPlanWriter · ReportGenerator"]
+    AUD[Audit & Report]
 ```
 
 ### Component Layers
@@ -88,42 +88,42 @@ ACO is organized into six layers. Each layer has a single responsibility and dep
 ```mermaid
 graph TB
     subgraph INFRA["Infrastructure"]
-        OL["Ollama / Local LLM"]
-        LR["LoadRunner"]
-        SIM["HttpRestWorkloadSimulator"]
+        OL[Ollama / Local LLM]
+        LR[Load Runner]
+        SIM[Workload Simulator]
     end
 
     subgraph OBS["Observation"]
-        GMC["GcMetricsCollector"]
-        SBD["SloBreachDetector"]
-        ML["MetricsLogger"]
+        GMC[Metrics Collector]
+        SBD[SLO Breach Detector]
+        ML[Metrics Logger]
     end
 
     subgraph REASON["Reasoning"]
-        LLMA["SpringAiLlmAgent"]
-        SA["SimpleAgent"]
-        LPB["LlmPromptBuilder"]
-        LRP["LlmResponseParser"]
+        LLMA[LLM Agent]
+        SA[Simple Agent]
+        LPB[Prompt Builder]
+        LRP[Response Parser]
     end
 
     subgraph PLAN["Planning"]
-        PA2["PlanAssembler"]
-        OP["OptimizationPlan"]
-        PCE["PlanChange · PlanEvidence"]
-        VRR["ValidationRecipe · RollbackRecipe"]
+        PA2[Plan Assembler]
+        OP[Optimization Plan]
+        PCE[Plan Evidence]
+        VRR[Rollback Recipe]
     end
 
     subgraph GOV["Governance"]
-        PE2["DefaultPolicyEngine"]
-        ABL["ActuationBudgetLedger"]
-        AG2["AutonomyGate"]
+        PE2[Policy Engine]
+        ABL[Budget Ledger]
+        AG2[Autonomy Gate]
     end
 
     subgraph AUDIT2["Validation & Audit"]
-        VE2["ValidationExecutor"]
-        RE2["RollbackExecutor"]
-        PW["PlanWriter"]
-        RG["ReportGenerator"]
+        VE2[Validation Executor]
+        RE2[Rollback Executor]
+        PW[Plan Writer]
+        RG[Report Generator]
     end
 
     INFRA --> OBS
