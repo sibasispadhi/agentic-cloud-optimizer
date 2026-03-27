@@ -13,8 +13,12 @@
 
 ## What ACO Is
 
-ACO is an open-source Java application for experimenting with **governed optimization** of JVM-backed services.
-It watches runtime signals such as latency, heap, GC, CPU, and thread behavior; produces structured
+ACO is an open-source Java **Autonomic Reliability Governance (ARG)** reference implementation for experimenting
+with governed optimization of JVM-backed services. ARG is the discipline of designing bounded, auditable,
+and reversible automation under explicit constraints — particularly where agents plan and act faster than
+human-in-the-loop validation can operate.
+
+ACO watches runtime signals such as latency, heap, GC, CPU, and thread behavior; produces structured
 optimization plans; evaluates those plans against policy and actuation budgets; and validates whether
 changes helped or hurt.
 
@@ -25,8 +29,10 @@ ACO currently supports:
 - **Deterministic fallback analysis** through `SimpleAgent`
 - **OptimizationPlan artifacts** for auditability
 - **Policy evaluation** before actuation
-- **Actuation budgets** for bounded change
-- **Confidence gates and autonomy modes**
+- **Actuation budgets** — rate-limiting change magnitude and frequency, not just traffic
+- **Blast radius constraints** through actuation scoping
+- **Confidence gates and progressive autonomy modes** (Advisory / Auto-Governed / Denied)
+- **Eligibility tiers** — action-based permission model separating observational, low-risk, and high-risk actions
 - **Validation and rollback modeling**
 - **Deterministic benchmark scenarios** for amplification testing
 
@@ -146,7 +152,7 @@ The Architecture diagram above shows the full pipeline. Each stage maps to a lay
 |---|---|---|
 | Workload Simulator | Infrastructure | executes load; drives metric signals |
 | Metrics Collection | Observation | latency, throughput, heap, CPU, GC, threads |
-| SLO Detector | Observation | triggers optimization when thresholds breach |
+| SLO Detector | Observation | triggers optimization when Service Level Objective (SLO) thresholds breach |
 | Agent Reasoning | Reasoning | `SpringAiLlmAgent` or `SimpleAgent` |
 | Plan Assembly | Planning | `OptimizationPlan` with evidence and rollback path |
 | Policy Evaluation | Governance | `PolicyEngine` approves, warns, or denies |
@@ -229,7 +235,7 @@ production data.
 Example outcomes from the benchmark layer:
 - **Retry storm**: 3× amplification factor
 - **Naive latency-reactive agent**: p99 worsened by **58%**
-- **Governed agent**: p99 recovered by **75%**
+- **Governed agent**: p99 recovered by **75%** (480 ms → 120 ms); throughput restored from 40 RPS to 78 RPS
 
 That is the whole point of the project: useful automation should dampen instability, not cosplay as a chaos monkey.
 
